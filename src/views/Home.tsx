@@ -7,9 +7,24 @@ import imgSnap from "@/img/bg-snap-photos.svg";
 import star1 from "@/img/star-1.svg";
 import Container from "@/utils/Container";
 import imageExample from "@/img/image-example.webp";
+import {useEffect, useState} from "react";
+import Hero from "@/components/Hero";
 
 
 export default function HomeView() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener("resize", handleResize);
+
+    // on load
+    handleResize();
+    console.log( "isMobile", isMobile);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [isMobile]);
+
   const itemList = [
     {
       title: "Sed ut perspiciatis",
@@ -52,21 +67,9 @@ export default function HomeView() {
 
   return (
     <div className="w-full text-white">
-        <section className="w-full bg-fixed bg-cover bg-center bg-no-repeat p-12 flex-col text-center items-center justify-center" style={{ backgroundImage: `url(${bgIntro.src})` }}>
-            {/* <img src={bgIntro.src} alt="bg-intro" /> */}
-            <div>
-                <img className="w-full max-w-lg mx-auto" src={imgAcumula.src} alt="img-acumula" />
-            </div>
-            <div>
-                <h3 className="text-5xl font-bold mb-5">¡Tus acciones ahora valen más!</h3>
-                <h5 className="text-xl font-bold">Acumula puntos conviértelos en premios increíbles.</h5>
-                <p> Mientras más participes, más ganas: canjea tus puntos por productos, descuentos o experiencias exclusivas.</p>
+        <Hero />
 
-                <Button className="w-full mx-auto mt-4">Login</Button>
-            </div>
-        </section>
-
-        <section className="w-full bg-[#F6F6F6] p-12 py-24 flex-col text-center items-center justify-center bg-cover bg-center bg-no-repeat" style={{ backgroundImage: `url(${imgSnap.src})` }}>
+        <section className="w-full bg-[#F6F6F6] p-12 lg:py-24 flex-col text-center items-center justify-center bg-cover bg-center bg-no-repeat" style={{ backgroundImage: `url(${!isMobile && imgSnap.src})` }}>
             <Container>
                 <h2 className="text-4xl font-bold mb-5 text-custom-green uppercase">Snap photos and share <br />  like never before</h2>
                 <div className="flex justify-between gap-x-120 gap-y-10 text-left flex-wrap mt-16">
@@ -75,9 +78,9 @@ export default function HomeView() {
             </Container>
         </section>
 
-        <section className="w-full bg-white p-12 py-24 flex-col items-center justify-center">
+        <section className="w-full bg-white p-12 lg:py-24 flex-col items-center justify-center">
             <Container>
-               <div className="flex items-center gap-10">
+               <div className="flex flex-col lg:flex-row items-center gap-10">
                  <div className="md:w-1/2 w-full">
                     <img src={imageExample.src} alt="image-example" />
                  </div>
