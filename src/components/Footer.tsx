@@ -78,9 +78,9 @@ export default function Footer() {
   return (
     <footer className="w-full bg-[#195308] pt-12 pb-8">
       <Container>
-        <div className="w-full flex items-center justify-between">
+        <div className="w-full flex flex-col md:flex-row items-center justify-between">
           <div className="w-full lg:w-1/3">
-            <ul className="flex items-center justify-between gap-4">
+            <ul className="flex flex-col md:flex-row items-center justify-between gap-4">
               {menuCol1.map((item) => (
                 <li key={item.label}>
                   <Link
@@ -102,7 +102,7 @@ export default function Footer() {
             />
           </div>
           <div className="w-full lg:w-1/3">
-            <ul className="flex items-center justify-between gap-4">
+            <ul className="flex flex-col md:flex-row items-center justify-between gap-4">
               {menuCol2.map((item) => (
                 <li key={item.label}>
                   <Link

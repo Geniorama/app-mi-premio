@@ -4,7 +4,7 @@ import imgAcumula from "@/img/acumula-puntos.webp"
 
 export default function Hero() {
   return (
-    <section className="w-full bg-fixed bg-cover bg-center bg-no-repeat p-6 lg:p-12 flex-col text-center items-center justify-center" style={{ backgroundImage: `url(${bgIntro.src})` }}>
+    <section className="w-full bg-fixed bg-cover bg-center bg-no-repeat p-6 lg:p-12 flex-col text-center items-center justify-center text-white" style={{ backgroundImage: `url(${bgIntro.src})` }}>
         {/* <img src={bgIntro.src} alt="bg-intro" /> */}
         <div>
             <img className="w-full max-w-lg mx-auto" src={imgAcumula.src} alt="img-acumula" />

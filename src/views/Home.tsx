@@ -1,8 +1,6 @@
 "use client";
 
 import Button from "@/utils/Button";
-import bgIntro from "@/img/bg-intro.webp";
-import imgAcumula from "@/img/acumula-puntos.webp";
 import imgSnap from "@/img/bg-snap-photos.svg";
 import star1 from "@/img/star-1.svg";
 import Container from "@/utils/Container";
