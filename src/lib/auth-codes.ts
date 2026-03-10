@@ -11,7 +11,10 @@ interface CodeEntry {
   expiresAt: number;
 }
 
-const codesStore = new Map<string, CodeEntry>();
+// Persiste entre hot-reloads en desarrollo
+const globalForAuthCodes = globalThis as unknown as { codesStore: Map<string, CodeEntry> };
+const codesStore = globalForAuthCodes.codesStore ?? new Map<string, CodeEntry>();
+if (process.env.NODE_ENV !== "production") globalForAuthCodes.codesStore = codesStore;
 
 /**
  * Genera un código numérico de 6 dígitos.
@@ -32,6 +35,7 @@ export function storeLoginCode(email: string): string {
     email: normalizedEmail,
     expiresAt: Date.now() + CODE_EXPIRY_MS,
   });
+  console.log("[auth-codes] Código guardado para:", normalizedEmail);
 
   return code;
 }
@@ -40,13 +44,22 @@ export function storeLoginCode(email: string): string {
  * Verifica si el código coincide para el email dado.
  */
 export function verifyLoginCode(email: string, code: string): boolean {
-  const entry = codesStore.get(email.toLowerCase().trim());
-  if (!entry) return false;
-  if (Date.now() > entry.expiresAt) {
-    codesStore.delete(email.toLowerCase().trim());
+  const normalizedEmail = email.toLowerCase().trim();
+  const entry = codesStore.get(normalizedEmail);
+
+  if (!entry) {
+    console.log("[auth-codes] No hay código para:", normalizedEmail, "| Store keys:", [...codesStore.keys()]);
     return false;
   }
-  const valid = entry.code === code;
-  if (valid) codesStore.delete(email.toLowerCase().trim());
+  if (Date.now() > entry.expiresAt) {
+    codesStore.delete(normalizedEmail);
+    console.log("[auth-codes] Código expirado para:", normalizedEmail);
+    return false;
+  }
+  const valid = entry.code === code.trim();
+  if (!valid) {
+    console.log("[auth-codes] Código no coincide. Esperado:", entry.code, "| Recibido:", code);
+  }
+  if (valid) codesStore.delete(normalizedEmail);
   return valid;
 }

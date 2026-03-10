@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { searchContactByEmail } from "@/lib/zoho";
+import { searchContactByEmail, isContactEligibleForLogin } from "@/lib/zoho";
 import { storeLoginCode } from "@/lib/auth-codes";
 import { sendLoginCodeEmail } from "@/lib/email";
 
@@ -28,10 +28,26 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          error: "Este correo no está registrado. Verifica que seas un contacto del CRM.",
+          error: "Este correo no está registrado.",
           ...(debug && { debug: { conexionZoho: "OK", contactoExiste: false } }),
         },
         { status: 404 }
+      );
+    }
+
+    if (!isContactEligibleForLogin(contact)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Tu cuenta no está activa. Contacta a soporte.",
+          ...(debug && {
+            debug: {
+              Estado_Fidelizaci_n: contact.Estado_Fidelizaci_n,
+              Estado: contact.Estado,
+            },
+          }),
+        },
+        { status: 403 }
       );
     }
 
@@ -58,6 +74,7 @@ export async function POST(request: Request) {
     const result = await sendLoginCodeEmail(email, code);
 
     if (!result.success) {
+      console.error("[send-code] Fallo al enviar email:", result.error);
       return NextResponse.json(
         {
           success: false,

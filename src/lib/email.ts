@@ -1,57 +1,13 @@
 /**
- * Envío de emails.
- * - Mail Relay (SMTP local): MAIL_RELAY_HOST (para desarrollo con MailDev, etc.)
- * - ZeptoMail: ZOHO_ZEPTOMAIL_SEND_TOKEN (producción)
- * - Fallback: solo log en consola
+ * Envío de emails vía ZeptoMail (Zoho).
+ * Fallback: log en consola si no hay token configurado.
+ * Para EU: ZOHO_ZEPTOMAIL_EU=true (usa api.zeptomail.eu)
  */
 
-import nodemailer from "nodemailer";
-
-const ZEPTOMAIL_URL = "https://api.zeptomail.com/v1.1/email";
-
-export interface SendEmailOptions {
-  to: string;
-  subject: string;
-  htmlBody: string;
-}
-
-async function sendViaMailRelay(
-  to: string,
-  subject: string,
-  htmlBody: string
-): Promise<{ success: boolean; error?: string }> {
-  const host = process.env.MAIL_RELAY_HOST;
-  const port = parseInt(process.env.MAIL_RELAY_PORT || "1025", 10);
-  const secure = process.env.MAIL_RELAY_SECURE === "true";
-
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth:
-      process.env.MAIL_RELAY_USER && process.env.MAIL_RELAY_PASS
-        ? {
-            user: process.env.MAIL_RELAY_USER,
-            pass: process.env.MAIL_RELAY_PASS,
-          }
-        : undefined,
-  });
-
-  try {
-    await transporter.sendMail({
-      from: `"${process.env.MAIL_RELAY_FROM_NAME || "Mi Premio"}" <${process.env.MAIL_RELAY_FROM || "noreply@local.dev"}>`,
-      to,
-      subject,
-      html: htmlBody,
-    });
-    return { success: true };
-  } catch (e) {
-    return {
-      success: false,
-      error: e instanceof Error ? e.message : "Error al enviar por SMTP",
-    };
-  }
-}
+const ZEPTOMAIL_URL =
+  process.env.ZOHO_ZEPTOMAIL_EU === "true"
+    ? "https://api.zeptomail.eu/v1.1/email"
+    : "https://api.zeptomail.com/v1.1/email";
 
 export async function sendLoginCodeEmail(
   to: string,
@@ -68,20 +24,19 @@ export async function sendLoginCodeEmail(
     </div>
   `;
 
-  // 1. Mail Relay (local) - prioridad para desarrollo
-  if (process.env.MAIL_RELAY_HOST) {
-    return sendViaMailRelay(to, subject, htmlBody);
-  }
+  const zeptoToken = (process.env.ZOHO_ZEPTOMAIL_SEND_TOKEN || "").trim();
 
-  // 2. ZeptoMail (producción)
-  const zeptoToken = process.env.ZOHO_ZEPTOMAIL_SEND_TOKEN;
   if (zeptoToken) {
+    const authHeader = zeptoToken.startsWith("Zoho-enczapikey ")
+      ? zeptoToken
+      : `Zoho-enczapikey ${zeptoToken}`;
+
     try {
       const response = await fetch(ZEPTOMAIL_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Zoho-enczapikey ${zeptoToken}`,
+          Authorization: authHeader,
         },
         body: JSON.stringify({
           from: {
@@ -95,19 +50,30 @@ export async function sendLoginCodeEmail(
       });
 
       if (!response.ok) {
-        const err = await response.text();
-        return { success: false, error: err };
+        const errText = await response.text();
+        let errParsed: unknown;
+        try {
+          errParsed = errText ? JSON.parse(errText) : null;
+        } catch {
+          errParsed = errText;
+        }
+        console.error("[ZeptoMail] Error:", response.status, JSON.stringify(errParsed, null, 2));
+        const errMsg =
+          typeof errParsed === "object" &&
+          errParsed !== null &&
+          "message" in errParsed
+            ? String((errParsed as { message?: string }).message)
+            : errText || `ZeptoMail error ${response.status}`;
+        return { success: false, error: errMsg };
       }
       return { success: true };
     } catch (e) {
-      return {
-        success: false,
-        error: e instanceof Error ? e.message : "Error al enviar email",
-      };
+      const msg = e instanceof Error ? e.message : "Error al enviar email";
+      console.error("[ZeptoMail] Excepción:", msg, e);
+      return { success: false, error: msg };
     }
   }
 
-  // 3. Fallback: solo log
   console.log("[DEV] Código de login para", to, ":", code);
   return { success: true };
 }

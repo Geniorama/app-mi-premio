@@ -60,6 +60,16 @@ export interface ZohoContact {
   First_Name?: string;
   Last_Name?: string;
   Full_Name?: string;
+  Estado_Fidelizaci_n?: string;
+  Estado?: string;
+}
+
+/** Valida que el contacto pueda acceder (Estado y Estado_Fidelizaci_n = Activo) */
+export function isContactEligibleForLogin(contact: ZohoContact | null): boolean {
+  if (!contact) return false;
+  return (
+    contact.Estado_Fidelizaci_n === "Activo" && contact.Estado === "Activo"
+  );
 }
 
 export interface ZohoSearchResponse {
