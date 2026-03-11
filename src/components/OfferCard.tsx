@@ -1,6 +1,7 @@
 import Button from '@/utils/Button';
 
 export interface OfferCardProps {
+  id?: string;
   image: string;
   title?: string;
   buttonText?: string;

@@ -36,6 +36,7 @@ export default function Header() {
 
   const navItems = [
     { label: "Home", href: "/" },
+    { label: "Catálogo", href: "/catalogo" },
     ...(user ? [{ label: "Perfil", href: "/perfil" }] : []),
     { label: "Pricing", href: "#" },
     { label: "Community", href: "#" },
