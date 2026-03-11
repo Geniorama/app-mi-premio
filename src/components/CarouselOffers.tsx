@@ -44,8 +44,11 @@ export default function CarouselOffers({ offers }: { offers: Offer[] }) {
       }}
     >
       {offers.map((offer, index) => (
-        <SwiperSlide key={index}>
-            <div className="text-center space-y-2 cursor-pointer" onClick={() => handleClick(offer)}>
+        <SwiperSlide key={index} className="overflow-hidden py-6 px-4">
+            <div
+              className="text-center space-y-2 cursor-pointer transition-transform duration-300 hover:scale-110 origin-center"
+              onClick={() => handleClick(offer)}
+            >
                 <img src={offer.image} alt={offer.title} className="w-full" />
                 <h3 className="text-xl font-bold">{offer.title}</h3>
                 <span className="font-bold text-xl">{offer.price}</span>

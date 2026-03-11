@@ -4,6 +4,7 @@ import Hero from "@/components/Hero";
 import Container from "@/utils/Container";
 import BgSnap2 from "@/img/bg-snap-2.svg";
 import CarouselOffers from "@/components/CarouselOffers";
+import Button from "@/utils/Button";
 
 export default function PerfilAfiliadoView() {
   const offers = [
@@ -90,6 +91,9 @@ export default function PerfilAfiliadoView() {
         <section className="p-12 lg:py-24">
             <Container>
                 <CarouselOffers offers={offers} />
+                <Button onClick={() => {}} className="w-full mx-auto mt-4" variant="secondary">
+                  Ver más
+                </Button>
             </Container>
         </section>
     </div>

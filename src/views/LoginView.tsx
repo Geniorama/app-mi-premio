@@ -4,10 +4,8 @@ import Container from "@/utils/Container";
 import Logo from "@/img/logo-mi-premio.svg";
 import Button from "@/utils/Button";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function LoginView() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"email" | "code">("email");
@@ -32,14 +30,14 @@ export default function LoginView() {
       const data = await res.json();
 
       if (!res.ok) {
-        setMessage({ type: "error", text: data.error || "Error al enviar el código" });
+        setMessage({ type: "error", text: data.error || "Error al enviar el c?digo" });
         return;
       }
 
       setMessage({ type: "success", text: data.message });
       setStep("code");
     } catch {
-      setMessage({ type: "error", text: "Error de conexión. Intenta de nuevo." });
+      setMessage({ type: "error", text: "Error de conexi?n. Intenta de nuevo." });
     } finally {
       setLoading(false);
     }
@@ -60,13 +58,13 @@ export default function LoginView() {
       const data = await res.json();
 
       if (!res.ok) {
-        setMessage({ type: "error", text: data.error || "Código inválido" });
+        setMessage({ type: "error", text: data.error || "C?digo inv?lido" });
         return;
       }
 
-      router.push(data.redirect || "/perfil");
+      window.location.href = data.redirect || "/perfil";
     } catch {
-      setMessage({ type: "error", text: "Error de conexión. Intenta de nuevo." });
+      setMessage({ type: "error", text: "Error de conexi?n. Intenta de nuevo." });
     } finally {
       setLoading(false);
     }
@@ -81,7 +79,7 @@ export default function LoginView() {
 
           <div className="shadow-lg p-12 rounded-lg mt-12 bg-white max-w-md w-full">
             <img src={Logo.src} alt="Logo" className="w-20 mx-auto" />
-            <h2 className="text-2xl font-bold my-3">Inicia sesión</h2>
+            <h2 className="text-2xl font-bold my-3">Inicia sesi?n</h2>
 
             {message && (
               <div
@@ -99,7 +97,7 @@ export default function LoginView() {
               <form onSubmit={handleSendCode}>
                 <input
                   name="email"
-                  placeholder="Correo electrónico"
+                  placeholder="Correo electr?nico"
                   className="w-full p-2 rounded-lg border border-gray-300"
                   type="email"
                   id="email"
@@ -114,17 +112,17 @@ export default function LoginView() {
                   className="w-full! mt-4 whitespace-nowrap"
                   disabled={loading}
                 >
-                  {loading ? "Enviando..." : "Enviar código de verificación"}
+                  {loading ? "Enviando..." : "Enviar c?digo de verificaci?n"}
                 </Button>
               </form>
             ) : (
               <form onSubmit={handleVerifyCode}>
                 <p className="text-sm text-gray-600 mb-2">
-                  Código enviado a <strong>{email}</strong>
+                  C?digo enviado a <strong>{email}</strong>
                 </p>
                 <input
                   name="code"
-                  placeholder="Código de 6 dígitos"
+                  placeholder="C?digo de 6 d?gitos"
                   className="w-full p-2 rounded-lg border border-gray-300 text-center text-xl tracking-widest"
                   type="text"
                   inputMode="numeric"
@@ -140,7 +138,7 @@ export default function LoginView() {
                   className="w-full! mt-4 whitespace-nowrap"
                   disabled={loading || code.length !== 6}
                 >
-                  {loading ? "Verificando..." : "Verificar e iniciar sesión"}
+                  {loading ? "Verificando..." : "Verificar e iniciar sesi?n"}
                 </Button>
                 <button
                   type="button"
