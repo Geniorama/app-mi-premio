@@ -80,6 +80,99 @@ export interface ZohoSearchResponse {
   };
 }
 
+export interface ZohoRedemption {
+  id: string;
+  Name?: string;
+  Puntos_a_Redimir?: number;
+  Estado_Redencion?: string;
+  Created_Time?: string;
+}
+
+/**
+ * Obtiene el historial de redenciones de un contacto buscando por email
+ * en el campo Redencion_Membresia del módulo Redenciones.
+ */
+export async function getRedemptionsByEmail(
+  email: string
+): Promise<ZohoRedemption[]> {
+  const token = await getZohoAccessToken();
+
+  const criteria = `(Redencion_Membresia:equals:${email})`;
+  const url =
+    `${ZOHO_CRM_DOMAIN}/crm/v6/Redenciones/search` +
+    `?criteria=${encodeURIComponent(criteria)}&per_page=50&sort_by=Created_Time&sort_order=desc`;
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Zoho-oauthtoken ${token}` },
+  });
+
+  if (response.status === 204) {
+    console.log(`[Zoho] Sin redenciones para: ${email}`);
+    return [];
+  }
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error("[Zoho] Error buscando redenciones:", response.status, error);
+    throw new Error(`Zoho CRM redemptions error: ${response.status} - ${error}`);
+  }
+
+  const result = (await response.json()) as ZohoListResponse<ZohoRedemption>;
+  console.log(`[Zoho] ${result.data?.length ?? 0} redenciones encontradas para: ${email}`);
+  return result.data ?? [];
+}
+
+export interface ZohoMembership {
+  id: string;
+  /** Campo "Correo electrónico 1" del registro de membresía */
+  Correo_electr_nico_1?: string;
+  Saldo_Puntos_Disponibles?: number;
+  /** Ajustar al nombre API real del campo de categoría */
+  Categor_a?: string;
+}
+
+interface ZohoListResponse<T> {
+  data: T[];
+  info: { count: number; more_records: boolean };
+}
+
+/**
+ * Busca la membresía de un contacto en el módulo CustomModule23
+ * usando el campo "Nombre de Membresia" (que contiene el email).
+ */
+export async function getMembershipByEmail(
+  email: string
+): Promise<ZohoMembership | null> {
+  const token = await getZohoAccessToken();
+
+  const criteria = `(Correo_electr_nico_1:equals:${email})`;
+  const url =
+    `${ZOHO_CRM_DOMAIN}/crm/v6/Membresias/search` +
+    `?criteria=${encodeURIComponent(criteria)}`;
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Zoho-oauthtoken ${token}` },
+  });
+
+  if (response.status === 204) {
+    console.log(`[Zoho] Membresía NO encontrada para: ${email}`);
+    return null;
+  }
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error("[Zoho] Error buscando membresía:", response.status, error);
+    throw new Error(`Zoho CRM membership error: ${response.status} - ${error}`);
+  }
+
+  const result = (await response.json()) as ZohoListResponse<ZohoMembership>;
+  const membership = result.data?.[0] ?? null;
+  if (membership) {
+    console.log(`[Zoho] Membresía encontrada para: ${email} (ID: ${membership.id})`);
+  }
+  return membership;
+}
+
 /**
  * Busca un contacto en Zoho CRM por email.
  * Retorna el contacto si existe, null si no.

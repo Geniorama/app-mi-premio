@@ -100,9 +100,18 @@ export default function VoucherDetailView() {
 
   const voucherImage = voucher.image || PLACEHOLDER_IMAGE;
 
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/");
+    router.refresh();
+  };
+
   return (
     <div>
-      <Hero />
+      <Hero 
+        buttonText="Salida segura"
+        onClick={logout}
+      />
 
       <section className="w-full bg-white py-10 lg:py-14">
         <Container>

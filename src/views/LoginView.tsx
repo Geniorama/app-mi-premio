@@ -30,14 +30,14 @@ export default function LoginView() {
       const data = await res.json();
 
       if (!res.ok) {
-        setMessage({ type: "error", text: data.error || "Error al enviar el c?digo" });
+        setMessage({ type: "error", text: data.error || "Error al enviar el código" });
         return;
       }
 
       setMessage({ type: "success", text: data.message });
       setStep("code");
     } catch {
-      setMessage({ type: "error", text: "Error de conexi?n. Intenta de nuevo." });
+      setMessage({ type: "error", text: "Error de conexión. Intenta de nuevo." });
     } finally {
       setLoading(false);
     }
@@ -58,13 +58,13 @@ export default function LoginView() {
       const data = await res.json();
 
       if (!res.ok) {
-        setMessage({ type: "error", text: data.error || "C?digo inv?lido" });
+        setMessage({ type: "error", text: data.error || "Código inválido" });
         return;
       }
 
       window.location.href = data.redirect || "/perfil";
     } catch {
-      setMessage({ type: "error", text: "Error de conexi?n. Intenta de nuevo." });
+      setMessage({ type: "error", text: "Error de conexión. Intenta de nuevo." });
     } finally {
       setLoading(false);
     }
@@ -79,7 +79,7 @@ export default function LoginView() {
 
           <div className="shadow-lg p-12 rounded-lg mt-12 bg-white max-w-md w-full">
             <img src={Logo.src} alt="Logo" className="w-20 mx-auto" />
-            <h2 className="text-2xl font-bold my-3">Inicia sesi?n</h2>
+            <h2 className="text-2xl font-bold my-3">Inicia sesión</h2>
 
             {message && (
               <div
@@ -97,7 +97,7 @@ export default function LoginView() {
               <form onSubmit={handleSendCode}>
                 <input
                   name="email"
-                  placeholder="Correo electr?nico"
+                  placeholder="Correo electrónico"
                   className="w-full p-2 rounded-lg border border-gray-300"
                   type="email"
                   id="email"
@@ -112,17 +112,17 @@ export default function LoginView() {
                   className="w-full! mt-4 whitespace-nowrap"
                   disabled={loading}
                 >
-                  {loading ? "Enviando..." : "Enviar c?digo de verificaci?n"}
+                  {loading ? "Enviando..." : "Enviar código de verificación"}
                 </Button>
               </form>
             ) : (
               <form onSubmit={handleVerifyCode}>
                 <p className="text-sm text-gray-600 mb-2">
-                  C?digo enviado a <strong>{email}</strong>
+                  Código enviado a <strong>{email}</strong>
                 </p>
                 <input
                   name="code"
-                  placeholder="C?digo de 6 d?gitos"
+                  placeholder="Código de 6 dígitos"
                   className="w-full p-2 rounded-lg border border-gray-300 text-center text-xl tracking-widest"
                   type="text"
                   inputMode="numeric"
@@ -138,7 +138,7 @@ export default function LoginView() {
                   className="w-full! mt-4 whitespace-nowrap"
                   disabled={loading || code.length !== 6}
                 >
-                  {loading ? "Verificando..." : "Verificar e iniciar sesi?n"}
+                  {loading ? "Verificando..." : "Verificar e iniciar sesión"}
                 </Button>
                 <button
                   type="button"

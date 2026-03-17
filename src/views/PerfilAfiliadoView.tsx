@@ -5,8 +5,35 @@ import Container from "@/utils/Container";
 import BgSnap2 from "@/img/bg-snap-2.svg";
 import CarouselOffers from "@/components/CarouselOffers";
 import Button from "@/utils/Button";
+import { useEffect, useState } from "react";
+
+interface UserSession {
+  email: string;
+  fullName: string;
+  contactId: string;
+}
+
+interface Membership {
+  id: string;
+  puntos: number | null;
+  categoria: string | null;
+}
 
 export default function PerfilAfiliadoView() {
+  const [user, setUser] = useState<UserSession | null>(null);
+  const [membership, setMembership] = useState<Membership | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/auth/me").then((r) => (r.ok ? r.json() : null)),
+      fetch("/api/user/membership").then((r) => (r.ok ? r.json() : null)),
+    ]).then(([meData, membershipData]) => {
+      if (meData?.user) setUser(meData.user);
+      if (membershipData?.membership) setMembership(membershipData.membership);
+      setLoading(false);
+    });
+  }, []);
   const offers = [
     {
       id: "1",
@@ -61,9 +88,29 @@ export default function PerfilAfiliadoView() {
             <Container>
                 <div className="flex flex-col lg:flex-row items-center gap-10">
                     <div className="md:w-2/3 w-full text-center lg:pr-30">
-                       <h2 className="text-4xl font-bold mb-5 text-custom-green">User Name Profile</h2>
-                       <h3 className="text-4xl font-bold mb-5 text-accent">7000 puntos</h3>
-                       <p className="text-3xl">Categoría</p>
+                       {loading ? (
+                         <div className="space-y-4 animate-pulse">
+                           <div className="h-10 bg-slate-200 rounded w-2/3 mx-auto" />
+                           <div className="h-10 bg-slate-200 rounded w-1/2 mx-auto" />
+                           <div className="h-8 bg-slate-200 rounded w-1/3 mx-auto" />
+                         </div>
+                       ) : !membership ? (
+                         <p className="text-2xl text-gray-400 font-medium">
+                           Información no disponible
+                         </p>
+                       ) : (
+                         <>
+                           <h2 className="text-4xl font-bold mb-5 text-custom-green">
+                             {user?.fullName ?? "—"}
+                           </h2>
+                           <h3 className="text-4xl font-bold mb-5 text-accent">
+                             {membership.puntos != null
+                               ? `${membership.puntos.toLocaleString("es-CO")} puntos`
+                               : "— puntos"}
+                           </h3>
+                           <p className="text-3xl">{membership.categoria ?? "—"}</p>
+                         </>
+                       )}
 
                        <p className="mt-6 text-left">lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
                     </div>
