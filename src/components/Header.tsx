@@ -30,16 +30,18 @@ export default function Header() {
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/");
+    window.location.href = "/";
   };
 
   const navItems = [
-    { label: "Home", href: "/" },
+    { label: "Inicio", href: "/" },
     { label: "Catálogo", href: "/catalogo" },
-    ...(user ? [{ label: "Perfil", href: "/perfil" }] : []),
-    { label: "Pricing", href: "#" },
-    { label: "Community", href: "#" },
-    { label: "Support", href: "#" },
+    ...(user
+      ? [
+          { label: "Mi perfil", href: "/perfil" },
+          { label: "Extractos", href: "/extractos" },
+        ]
+      : []),
   ];
 
   return (

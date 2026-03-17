@@ -4,7 +4,7 @@ import Hero from "@/components/Hero";
 import Container from "@/utils/Container";
 import Button from "@/utils/Button";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   FiFileText,
   FiDollarSign,
@@ -95,22 +95,28 @@ export default function VoucherDetailView() {
 
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const [aceptaPoliticas, setAceptaPoliticas] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
 
-  const canRedeem = aceptaTerminos && aceptaPoliticas;
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setIsLoggedIn(!!data?.user));
+  }, []);
+
+  const canRedeem = isLoggedIn === true && aceptaTerminos && aceptaPoliticas;
 
   const voucherImage = voucher.image || PLACEHOLDER_IMAGE;
 
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/");
-    router.refresh();
+    window.location.href = "/";
   };
 
   return (
     <div>
-      <Hero 
-        buttonText="Salida segura"
-        onClick={logout}
+      <Hero
+        buttonText={isLoggedIn ? "Salida segura" : "Iniciar sesión"}
+        onClick={isLoggedIn ? logout : () => { window.location.href = "/auth/login"; }}
       />
 
       <section className="w-full bg-white py-10 lg:py-14">
@@ -214,14 +220,24 @@ export default function VoucherDetailView() {
               Volver
             </Button>
             
-            <Button
-              variant="secondary"
-              onClick={() => canRedeem && console.log("Canjear")}
-              disabled={!canRedeem}
-              className="sm:w-[160px] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Redimir
-            </Button>
+            {isLoggedIn === false ? (
+              <Button
+                variant="secondary"
+                onClick={() => { window.location.href = "/auth/login"; }}
+                className="sm:w-[160px]"
+              >
+                Iniciar sesión
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                onClick={() => canRedeem && console.log("Canjear")}
+                disabled={!canRedeem}
+                className="sm:w-[160px] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Redimir
+              </Button>
+            )}
             
           </div>
         </Container>
