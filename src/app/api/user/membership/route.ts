@@ -28,6 +28,17 @@ export async function GET() {
         puntos: membership.Saldo_Puntos_Disponibles ?? null,
         categoria: membership.Categor_a ?? null,
       },
+      puntosAcumulados: (membership.Puntos_Membresia ?? []).map((p) => ({
+        id: p.id,
+        numero: p.LinkingModule10_Serial_Number ?? null,
+        puntosEntregados: p.Puntos_Entregados ?? null,
+        puntosRedimidos: p.Puntos_Redimidos ?? null,
+        fechaEntrega: p.Fecha_de_Entrega ?? null,
+        fechaVencimiento: p.Fecha_de_vencimiento_Puntos ?? null,
+        estado: p.Estado_Puntos_Entregados ?? null,
+        entregaOC: p.Entrega_OC?.name ?? null,
+        redencionNo: p.Redencion_No?.name ?? null,
+      })),
       redemptions: redemptions.map((r) => ({
         id: r.id,
         numero: r.Name,

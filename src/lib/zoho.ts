@@ -122,6 +122,19 @@ export async function getRedemptionsByEmail(
   return result.data ?? [];
 }
 
+export interface ZohoPuntoMembresia {
+  id: string;
+  LinkingModule10_Serial_Number?: string;
+  Puntos_Entregados?: number;
+  Puntos_Redimidos?: number | null;
+  Fecha_de_Entrega?: string;
+  Fecha_de_vencimiento_Puntos?: string;
+  Estado_Puntos_Entregados?: string;
+  Entrega_OC?: { name: string; id: string } | null;
+  Redencion_No?: { name: string; id: string } | null;
+  Se_Redimen?: boolean;
+}
+
 export interface ZohoMembership {
   id: string;
   /** Campo "Correo electrónico 1" del registro de membresía */
@@ -129,6 +142,8 @@ export interface ZohoMembership {
   Saldo_Puntos_Disponibles?: number;
   /** Ajustar al nombre API real del campo de categoría */
   Categor_a?: string;
+  /** Subformulario Puntos Membresía */
+  Puntos_Membresia?: ZohoPuntoMembresia[];
 }
 
 interface ZohoListResponse<T> {
@@ -137,40 +152,54 @@ interface ZohoListResponse<T> {
 }
 
 /**
- * Busca la membresía de un contacto en el módulo CustomModule23
- * usando el campo "Nombre de Membresia" (que contiene el email).
+ * Busca la membresía de un contacto por email y luego trae el registro
+ * completo por ID para incluir el subformulario Puntos_Membresia.
  */
 export async function getMembershipByEmail(
   email: string
 ): Promise<ZohoMembership | null> {
   const token = await getZohoAccessToken();
 
+  // Paso 1: buscar por email para obtener el ID
   const criteria = `(Correo_electr_nico_1:equals:${email})`;
-  const url =
+  const searchUrl =
     `${ZOHO_CRM_DOMAIN}/crm/v6/Membresias/search` +
     `?criteria=${encodeURIComponent(criteria)}`;
 
-  const response = await fetch(url, {
+  const searchRes = await fetch(searchUrl, {
     headers: { Authorization: `Zoho-oauthtoken ${token}` },
   });
 
-  if (response.status === 204) {
+  if (searchRes.status === 204) {
     console.log(`[Zoho] Membresía NO encontrada para: ${email}`);
     return null;
   }
 
-  if (!response.ok) {
-    const error = await response.text();
-    console.error("[Zoho] Error buscando membresía:", response.status, error);
-    throw new Error(`Zoho CRM membership error: ${response.status} - ${error}`);
+  if (!searchRes.ok) {
+    const error = await searchRes.text();
+    console.error("[Zoho] Error buscando membresía:", searchRes.status, error);
+    throw new Error(`Zoho CRM membership error: ${searchRes.status} - ${error}`);
   }
 
-  const result = (await response.json()) as ZohoListResponse<ZohoMembership>;
-  const membership = result.data?.[0] ?? null;
-  if (membership) {
-    console.log(`[Zoho] Membresía encontrada para: ${email} (ID: ${membership.id})`);
+  const searchResult = (await searchRes.json()) as ZohoListResponse<ZohoMembership>;
+  const partial = searchResult.data?.[0] ?? null;
+  if (!partial) return null;
+
+  console.log(`[Zoho] Membresía encontrada para: ${email} (ID: ${partial.id})`);
+
+  // Paso 2: traer el registro completo por ID para obtener subformularios
+  const recordUrl = `${ZOHO_CRM_DOMAIN}/crm/v6/Membresias/${partial.id}`;
+  const recordRes = await fetch(recordUrl, {
+    headers: { Authorization: `Zoho-oauthtoken ${token}` },
+  });
+
+  if (!recordRes.ok) {
+    console.warn(`[Zoho] No se pudo traer registro completo, usando resultado parcial`);
+    return partial;
   }
-  return membership;
+
+  const recordResult = (await recordRes.json()) as ZohoListResponse<ZohoMembership>;
+  return recordResult.data?.[0] ?? partial;
 }
 
 /**
