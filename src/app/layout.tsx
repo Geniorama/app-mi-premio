@@ -5,7 +5,7 @@ import "./globals.css";
 
 const montserrat = Montserrat({
   variable: "--font-montserrat",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
 });
 
 export const metadata: Metadata = {
@@ -20,9 +20,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" data-theme="light">
-      <body
-        className={`${montserrat.variable} antialiased`}
-      >
+      <head>
+        <meta charSet="utf-8" />
+      </head>
+      <body className={`${montserrat.variable} antialiased`}>
         {children}
       </body>
     </html>

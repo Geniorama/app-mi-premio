@@ -2,10 +2,17 @@
 
 import Container from "@/utils/Container";
 import Logo from "@/img/logo-mi-premio.svg";
+import imgSnap from "@/img/bg-snap-photos.svg";
 import Button from "@/utils/Button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import iconFacebook from "@/img/facebook-fill.svg";
+import iconInstagram from "@/img/instagram-fill.svg";
+import iconLinkedin from "@/img/linkedin-fill.svg";
+import iconYoutube from "@/img/youtube-fill.svg";
+import Link from "next/link";
 
 export default function LoginView() {
+  const [isMobile, setIsMobile] = useState(false);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"email" | "code">("email");
@@ -14,6 +21,15 @@ export default function LoginView() {
     type: "error" | "success";
     text: string;
   } | null>(null);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener("resize", handleResize);
+    handleResize();
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const handleSendCode = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -30,14 +46,14 @@ export default function LoginView() {
       const data = await res.json();
 
       if (!res.ok) {
-        setMessage({ type: "error", text: data.error || "Error al enviar el código" });
+        setMessage({ type: "error", text: data.error || "Error al enviar el c\u00f3digo" });
         return;
       }
 
       setMessage({ type: "success", text: data.message });
       setStep("code");
     } catch {
-      setMessage({ type: "error", text: "Error de conexión. Intenta de nuevo." });
+      setMessage({ type: "error", text: "Error de conexi\u00f3n. Intenta de nuevo." });
     } finally {
       setLoading(false);
     }
@@ -58,28 +74,60 @@ export default function LoginView() {
       const data = await res.json();
 
       if (!res.ok) {
-        setMessage({ type: "error", text: data.error || "Código inválido" });
+        setMessage({ type: "error", text: data.error || "C\u00f3digo inv\u00e1lido" });
         return;
       }
 
       window.location.href = data.redirect || "/perfil";
     } catch {
-      setMessage({ type: "error", text: "Error de conexión. Intenta de nuevo." });
+      setMessage({ type: "error", text: "Error de conexi\u00f3n. Intenta de nuevo." });
     } finally {
       setLoading(false);
     }
   };
 
+  const socialMedia = [
+    {
+      label: "Facebook",
+      href: "#",
+      target: "_blank",
+      icon: iconFacebook,
+    },
+    {
+      label: "Instagram",
+      href: "#",
+      target: "_blank",
+      icon: iconInstagram,
+    },
+    {
+      label: "Linkedin",
+      href: "#",
+      target: "_blank",
+      icon: iconLinkedin,
+    },
+    {
+      label: "Youtube",
+      href: "#",
+      target: "_blank",
+      icon: iconYoutube,
+    },
+  ];
+
   return (
-    <div className="bg-slate-100">
+    <div
+      className="w-full min-h-screen bg-[#F6F6F6] bg-cover bg-center bg-no-repeat"
+      style={{
+        backgroundImage: !isMobile ? `url(${imgSnap.src})` : undefined,
+      }}
+    >
       <Container>
         <div className="text-center p-12 flex flex-col items-center justify-center h-screen">
-          <h1 className="text-4xl font-medium text-custom-green">Login</h1>
-          <p className="text-lg">Bienvenido a nuestra plataforma</p>
+          <h1 className="text-4xl font-normal text-custom-green">Login</h1>
+          <p className="text-lg mt-4">Bienvenido a nuestra plataforma</p>
 
-          <div className="shadow-lg p-12 rounded-lg mt-12 bg-white max-w-md w-full">
-            <img src={Logo.src} alt="Logo" className="w-20 mx-auto" />
-            <h2 className="text-2xl font-bold my-3">Inicia sesión</h2>
+          <div className="shadow-lg p-12 border border-slate-700 mt-12 bg-white max-w-4xl w-full">
+            <img src={Logo.src} alt="Logo" className="w-26 mx-auto" />
+            <h2 className="text-2xl font-bold my-3">{"Inicia sesi\u00f3n"}</h2>
 
             {message && (
               <div
@@ -94,7 +142,7 @@ export default function LoginView() {
             )}
 
             {step === "email" ? (
-              <form onSubmit={handleSendCode}>
+              <form onSubmit={handleSendCode} className="max-w-xl mx-auto">
                 <input
                   name="email"
                   placeholder="Correo electrónico"
@@ -109,20 +157,21 @@ export default function LoginView() {
                 <Button
                   type="submit"
                   variant="secondary"
-                  className="w-full! mt-4 whitespace-nowrap"
+                  className="w-fit! mx-auto mt-12 whitespace-nowrap"
                   disabled={loading}
                 >
-                  {loading ? "Enviando..." : "Enviar código de verificación"}
+                  {loading ? "Enviando..." : "Enviar código"}
                 </Button>
               </form>
             ) : (
               <form onSubmit={handleVerifyCode}>
                 <p className="text-sm text-gray-600 mb-2">
-                  Código enviado a <strong>{email}</strong>
+                  {"C\u00f3digo enviado a "}
+                  <strong>{email}</strong>
                 </p>
                 <input
                   name="code"
-                  placeholder="Código de 6 dígitos"
+                  placeholder="C\u00f3digo de 6 d\u00edgitos"
                   className="w-full p-2 rounded-lg border border-gray-300 text-center text-xl tracking-widest"
                   type="text"
                   inputMode="numeric"
@@ -153,6 +202,18 @@ export default function LoginView() {
                 </button>
               </form>
             )}
+          </div>
+
+          <div className="mt-12">
+            <ul className="flex items-center justify-center gap-4">
+                  {socialMedia.map((item) => (
+                      <li key={item.label}>
+                          <Link className="h-12 w-12 flex items-center justify-center bg-yellow-400 hover:bg-yellow-500 transition-colors duration-300 rounded-full" href={item.href}>
+                              <img src={item.icon.src} alt={item.label} className="w-6 h-6" />
+                          </Link>
+                      </li>
+                  ))}
+              </ul>
           </div>
         </div>
       </Container>

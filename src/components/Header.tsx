@@ -57,15 +57,23 @@ export default function Header() {
               </Button>
             </div>
           ) : (
-            <Link href="/auth/login" className="block">
-              <Button variant="secondary" className="w-full h-8! uppercase">
-                Login
-              </Button>
-            </Link>
+            <div className="flex items-center gap-3 px-2">
+              <Link
+                href="/registro"
+                className="shrink-0 text-sm font-bold uppercase text-white underline underline-offset-4 decoration-white/80 hover:decoration-white"
+              >
+                Registro
+              </Link>
+              <Link href="/auth/login" className="min-w-0 flex-1">
+                <Button variant="secondary" className="w-full h-8! uppercase">
+                  Login
+                </Button>
+              </Link>
+            </div>
           ))}
       </div>
 
-      <div className="w-full max-w-[1600px] mx-auto flex items-center justify-between py-3 px-2">
+      <div className="w-full max-w-[1600px] mx-auto flex items-center justify-between py-3 px-4 lg:px-6">
         <div className="flex justify-between items-center lg:justify-start w-full gap-4 px-2 lg:px-0">
           <img
             className="w-full max-w-18 lg:max-w-28 cursor-pointer"
@@ -109,9 +117,19 @@ export default function Header() {
               <img className="w-6 h-6 ml-2" src={iconUser.src} alt="icon-user" />
             </div>
           ) : (
-            <Link href="/auth/login">
-              <Button variant="secondary">Login</Button>
-            </Link>
+            <div className="flex items-center gap-4">
+              <Link
+                href="/registro"
+                className="font-bold text-black underline underline-offset-6 decoration-2 decoration-transparent transition-colors hover:text-custom-green hover:decoration-custom-green"
+              >
+                Registro
+              </Link>
+              <Link href="/auth/login">
+                <Button variant="secondary" className="whitespace-nowrap">
+                  Login
+                </Button>
+              </Link>
+            </div>
           )}
         </div>
       </div>

@@ -70,7 +70,7 @@ export default function HomeView() {
         <section className="w-full bg-[#F6F6F6] p-12 lg:py-24 flex-col text-center items-center justify-center bg-cover bg-center bg-no-repeat" style={{ backgroundImage: `url(${!isMobile && imgSnap.src})` }}>
             <Container>
                 <h2 className="text-4xl font-bold mb-5 text-custom-green uppercase">Snap photos and share <br />  like never before</h2>
-                <div className="flex justify-between gap-x-120 gap-y-10 text-left flex-wrap mt-16">
+                <div className="flex justify-between gap-x-120 lg:gap-x-20 gap-y-10 text-left flex-wrap mt-16">
                     {renderItemList}
                 </div>
             </Container>

@@ -76,7 +76,7 @@ export default function Footer() {
   ];
 
   return (
-    <footer className="w-full bg-[#195308] pt-12 pb-8">
+    <footer className="w-full bg-[#195308] pt-12 pb-8 px-4 lg:px-6">
       <Container>
         <div className="w-full flex flex-col md:flex-row items-center justify-between">
           <div className="w-full lg:w-1/3">
