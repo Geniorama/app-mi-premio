@@ -75,7 +75,7 @@ function DetailItem({ icon, title, children }: DetailItemProps) {
   return (
     <div className="space-y-2">
       <div className="flex items-start gap-3">
-        <span className="shrink-0 w-6 h-6 bg-[#DC2626] rounded inline-flex items-center justify-center text-white">
+        <span className="shrink-0 w-6 h-6 text-[#DC2626] rounded inline-flex items-center justify-center">
           {icon}
         </span>
         <div>
@@ -122,7 +122,7 @@ export default function VoucherDetailView() {
       <section className="w-full bg-white py-10 lg:py-14">
         <Container>
           {/* Imagen del voucher - solo placeholder, sin overlays */}
-          <div className="relative w-full aspect-[4/1] overflow-hidden mb-10">
+          <div className="relative w-full aspect-[3/1] overflow-hidden mb-10">
             <img
               src={voucherImage}
               alt={voucher.title}
@@ -138,25 +138,25 @@ export default function VoucherDetailView() {
             {/* Columna izquierda - Detalles (~2/3) */}
             <div className="lg:w-2/3 space-y-8">
               <DetailItem
-                icon={<FiFileText size={16} />}
+                icon={<FiFileText size={18} />}
                 title="Términos & condiciones"
               >
                 {voucher.terms}
               </DetailItem>
               <DetailItem
-                icon={<FiDollarSign size={16} />}
+                icon={<FiDollarSign size={18} />}
                 title="Precio en COP"
               >
                 {voucher.priceCOP || "Consultar"}
               </DetailItem>
               <DetailItem
-                icon={<FiAward size={16} />}
+                icon={<FiAward size={18} />}
                 title="Valor en puntos"
               >
                 {voucher.pointsValue || "Consultar"}
               </DetailItem>
               <DetailItem
-                icon={<FiClock size={16} />}
+                icon={<FiClock size={18} />}
                 title="Tiempo de entrega"
               >
                 {voucher.deliveryTime || "24-48 horas"}
@@ -214,7 +214,7 @@ export default function VoucherDetailView() {
           <div className="flex flex-col sm:flex-row gap-6 mt-12 pt-8 justify-center">
             <Button
               variant="tertiary"
-              className=""
+              className="h-18 !bg-[#69BF50] text-white lg:min-w-[200px]"
               onClick={() => router.push("/catalogo")}
             >
               Volver
@@ -224,7 +224,7 @@ export default function VoucherDetailView() {
               <Button
                 variant="secondary"
                 onClick={() => { window.location.href = "/auth/login"; }}
-                className="sm:w-[160px]"
+                className="sm:w-[160px] h-18 lg:min-w-[200px]"
               >
                 Iniciar sesión
               </Button>
@@ -233,7 +233,7 @@ export default function VoucherDetailView() {
                 variant="secondary"
                 onClick={() => canRedeem && console.log("Canjear")}
                 disabled={!canRedeem}
-                className="sm:w-[160px] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="sm:w-[160px] h-18 disabled:opacity-50 disabled:cursor-not-allowed lg:min-w-[200px]"
               >
                 Redimir
               </Button>
