@@ -63,10 +63,23 @@ function mapEstadoRedencion(raw: unknown): SanityStatus | null {
   return null;
 }
 
+function rowTimestamp(row: Record<string, unknown>): number {
+  const candidates = ["Fecha_Movimiento", "Modified_Time", "Created_Time"];
+  for (const k of candidates) {
+    const v = row[k];
+    if (typeof v === "string") {
+      const t = Date.parse(v);
+      if (!Number.isNaN(t)) return t;
+    }
+  }
+  return 0;
+}
+
 /**
- * Busca dentro del registro de Zoho el subformulario de bitácora
- * sin conocer de antemano su API name exacto. Devuelve la última
- * entrada (mayor Created_Time) y su valor de estado.
+ * Busca dentro del registro de Zoho el subformulario de bitácora.
+ * Cada fila representa una transición (Estado_Anterior → Nuevo_Estado),
+ * así que el estado actual es el `Nuevo_Estado` de la fila más reciente
+ * (ordenando por Fecha_Movimiento; fallback a Modified_Time / Created_Time).
  */
 function extractLatestBitacoraStatus(
   record: Record<string, unknown>
@@ -78,16 +91,25 @@ function extractLatestBitacoraStatus(
     if (!/bit.*cora|bitacora/i.test(key)) continue;
 
     const rows = value as Array<Record<string, unknown>>;
-    const sorted = [...rows].sort((a, b) => {
-      const ta = typeof a.Created_Time === "string" ? Date.parse(a.Created_Time) : 0;
-      const tb = typeof b.Created_Time === "string" ? Date.parse(b.Created_Time) : 0;
-      return tb - ta;
-    });
+    const sorted = [...rows].sort((a, b) => rowTimestamp(b) - rowTimestamp(a));
     const latest = sorted[0];
 
-    const statusKey = Object.keys(latest).find((k) =>
-      /estado|status/i.test(k) && !/id$/i.test(k)
-    );
+    const preferredKeys = ["Nuevo_Estado", "Estado_Nuevo", "New_Status"];
+    let statusKey = preferredKeys.find((k) => k in latest);
+    if (!statusKey) {
+      statusKey = Object.keys(latest).find(
+        (k) =>
+          /nuevo.*estado|new.*status/i.test(k) &&
+          !/id$/i.test(k)
+      );
+    }
+    if (!statusKey) {
+      statusKey = Object.keys(latest).find(
+        (k) =>
+          /estado|status/i.test(k) &&
+          !/anterior|previous|old|id$/i.test(k)
+      );
+    }
     if (!statusKey) continue;
 
     return { value: latest[statusKey], subformKey: key, statusKey };
