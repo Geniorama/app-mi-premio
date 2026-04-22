@@ -6,7 +6,11 @@ import { setSessionCookie, SESSION_COOKIE, SESSION_MAX_AGE } from "@/lib/session
  *  Body: { "email": "correo@ejemplo.com", "fullName": "Nombre Opcional", "contactId": "id-opcional" }
  */
 export async function POST(request: NextRequest) {
-  if (process.env.NODE_ENV !== "development") {
+  const allowed =
+    process.env.NODE_ENV === "development" ||
+    process.env.DEV_LOGIN_ENABLED === "true";
+
+  if (!allowed) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
