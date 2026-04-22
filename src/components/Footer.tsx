@@ -1,79 +1,39 @@
-import logo from "@/img/logo-dark.svg";
+import logoDefault from "@/img/logo-dark.svg";
 import iconFacebook from "@/img/facebook-fill.svg";
 import iconInstagram from "@/img/instagram-fill.svg";
 import iconLinkedin from "@/img/linkedin-fill.svg";
 import iconYoutube from "@/img/youtube-fill.svg";
 import Link from "next/link";
 import Container from "@/utils/Container";
+import type { LinkItem, SocialLink } from "@/sanity/types";
 
-export default function Footer() {
-  const menuCol1 = [
-    {
-      label: "Home",
-      href: "#",
-      target: "_blank",
-    },
-    {
-      label: "Pricing",
-      href: "#",
-      target: "_blank",
-    },
-    {
-      label: "Community",
-      href: "#",
-      target: "_blank",
-    },
-    {
-      label: "Support",
-      href: "#",
-      target: "_blank",
-    },
-  ];
+interface FooterProps {
+  logoUrl?: string;
+  menuColumn1?: LinkItem[];
+  menuColumn2?: LinkItem[];
+  socialLinks?: SocialLink[];
+  copyright?: string;
+}
 
-  const menuCol2 = [
-    {
-      label: "Home",
-      href: "#",
-      target: "_blank",
-    },
-    {
-      label: "Pricing",
-      href: "#",
-      target: "_blank",
-    },
-    {
-      label: "Community",
-      href: "#",
-      target: "_blank",
-    },
-  ];
+const SOCIAL_ICON: Record<SocialLink["platform"], string> = {
+  facebook: iconFacebook.src,
+  instagram: iconInstagram.src,
+  linkedin: iconLinkedin.src,
+  youtube: iconYoutube.src,
+  twitter: iconFacebook.src,
+  tiktok: iconInstagram.src,
+};
 
-  const socialMedia = [
-    {
-      label: "Facebook",
-      href: "#",
-      target: "_blank",
-      icon: iconFacebook,
-    },
-    {
-      label: "Instagram",
-      href: "#",
-      target: "_blank",
-      icon: iconInstagram,
-    },
-    {
-      label: "Linkedin",
-      href: "#",
-      target: "_blank",
-      icon: iconLinkedin,
-    },
-    {
-      label: "Youtube",
-      href: "#",
-      target: "_blank",
-      icon: iconYoutube,
-    },
-  ];
+export default function Footer({
+  logoUrl,
+  menuColumn1,
+  menuColumn2,
+  socialLinks,
+  copyright,
+}: FooterProps) {
+  const col1 = menuColumn1 ?? [];
+  const col2 = menuColumn2 ?? [];
+  const social = socialLinks ?? [];
 
   return (
     <footer className="w-full bg-[#195308] pt-12 pb-8 px-4 lg:px-6">
@@ -81,11 +41,11 @@ export default function Footer() {
         <div className="w-full flex flex-col md:flex-row items-center justify-between">
           <div className="w-full lg:w-1/3">
             <ul className="flex flex-col md:flex-row items-center justify-between gap-4">
-              {menuCol1.map((item) => (
-                <li key={item.label}>
+              {col1.map((item, i) => (
+                <li key={`${item.label}-${i}`}>
                   <Link
                     className="text-white font-bold"
-                    target={item.target}
+                    target={item.target ?? "_self"}
                     href={item.href}
                   >
                     {item.label}
@@ -97,17 +57,17 @@ export default function Footer() {
           <div className="w-full lg:w-1/3">
             <img
               className="w-full max-w-[150px] mx-auto"
-              src={logo.src}
+              src={logoUrl || logoDefault.src}
               alt="logo"
             />
           </div>
           <div className="w-full lg:w-1/3">
             <ul className="flex flex-col md:flex-row items-center justify-between gap-4">
-              {menuCol2.map((item) => (
-                <li key={item.label}>
+              {col2.map((item, i) => (
+                <li key={`${item.label}-${i}`}>
                   <Link
                     className="text-white font-bold"
-                    target={item.target}
+                    target={item.target ?? "_self"}
                     href={item.href}
                   >
                     {item.label}
@@ -119,17 +79,29 @@ export default function Footer() {
         </div>
 
         <div className="mt-12 text-center">
+          {social.length > 0 && (
             <ul className="flex items-center justify-center gap-4">
-                {socialMedia.map((item) => (
-                    <li key={item.label}>
-                        <Link className="h-12 w-12 flex items-center justify-center bg-yellow-400 hover:bg-yellow-500 transition-colors duration-300 rounded-full" href={item.href}>
-                            <img src={item.icon.src} alt={item.label} className="w-6 h-6" />
-                        </Link>
-                    </li>
-                ))}
+              {social.map((item) => (
+                <li key={item.platform}>
+                  <Link
+                    className="h-12 w-12 flex items-center justify-center bg-yellow-400 hover:bg-yellow-500 transition-colors duration-300 rounded-full"
+                    href={item.href}
+                    target="_blank"
+                  >
+                    <img
+                      src={SOCIAL_ICON[item.platform]}
+                      alt={item.platform}
+                      className="w-6 h-6"
+                    />
+                  </Link>
+                </li>
+              ))}
             </ul>
+          )}
 
-            <p className="text-white mt-8 text-sm">© Photo, Inc. 2019. We love our users!</p>
+          {copyright && (
+            <p className="text-white mt-8 text-sm">{copyright}</p>
+          )}
         </div>
       </Container>
     </footer>

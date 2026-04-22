@@ -3,7 +3,7 @@
 import Hero from "@/components/Hero";
 import Container from "@/utils/Container";
 import Button from "@/utils/Button";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
   FiFileText,
@@ -13,57 +13,9 @@ import {
   FiCheck,
 } from "react-icons/fi";
 import Link from "next/link";
-
-interface VoucherItem {
-  id: string;
-  image: string;
-  title: string;
-  validUntil?: string;
-  terms?: string;
-  priceCOP?: string;
-  pointsValue?: string;
-  deliveryTime?: string;
-}
-
-// Datos de ejemplo - en producción vendrían de API
-const VOUCHERS: Record<string, VoucherItem> = {
-  "1": {
-    id: "1",
-    image: "",
-    title: "Voucher de experiencia",
-    validUntil: "DICIEMBRE 2025",
-    terms:
-      "Este voucher es canjeable por una experiencia exclusiva. Las condiciones varían según el proveedor. No aplica para devolución de efectivo.",
-    priceCOP: "$150.000 COP",
-    pointsValue: "7.000 puntos",
-    deliveryTime: "Entrega inmediata por correo electrónico",
-  },
-  "2": {
-    id: "2",
-    image: "",
-    title: "Oferta 2",
-    validUntil: "ENERO 2026",
-  },
-  "3": {
-    id: "3",
-    image: "",
-    title: "Oferta 3",
-  },
-};
-
-const defaultVoucher: VoucherItem = {
-  id: "1",
-  image: "",
-  title: "Voucher",
-  validUntil: "DICIEMBRE 2025",
-  terms:
-    "Este voucher es canjeable según los términos del proveedor. No aplica para devolución de efectivo.",
-  priceCOP: "$150.000 COP",
-  pointsValue: "7.000 puntos",
-  deliveryTime: "Entrega inmediata por correo electrónico",
-};
-
-const PLACEHOLDER_IMAGE = "https://placehold.co/1200x360/D94D1C/ffffff?text=+";
+import { PortableText } from "@portabletext/react";
+import { urlFor } from "@/sanity/image";
+import type { Voucher } from "@/sanity/types";
 
 interface DetailItemProps {
   icon: React.ReactNode;
@@ -80,32 +32,135 @@ function DetailItem({ icon, title, children }: DetailItemProps) {
         </span>
         <div>
           <h4 className="font-bold text-custom-green text-base">{title}</h4>
-          <p className="text-sm text-gray-600 mt-1">{children}</p>
+          <div className="text-sm text-gray-600 mt-1">{children}</div>
         </div>
       </div>
     </div>
   );
 }
 
-export default function VoucherDetailView() {
-  const params = useParams();
-  const router = useRouter();
-  const id = (params?.id as string) || "1";
-  const voucher = VOUCHERS[id] || defaultVoucher;
+const PLACEHOLDER_IMAGE = "https://placehold.co/1200x360/D94D1C/ffffff?text=+";
 
+const formatValidUntil = (dateStr?: string) => {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return dateStr;
+  return date
+    .toLocaleDateString("es-CO", { month: "long", year: "numeric" })
+    .toUpperCase();
+};
+
+const formatCOP = (value?: number) =>
+  value != null ? `$${value.toLocaleString("es-CO")} COP` : undefined;
+
+interface SessionUser {
+  email: string;
+  fullName: string;
+  contactId: string;
+}
+
+interface MembershipInfo {
+  puntos: number | null;
+  categoria: string | null;
+}
+
+export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
+  const router = useRouter();
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const [aceptaPoliticas, setAceptaPoliticas] = useState(false);
+  const [user, setUser] = useState<SessionUser | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+  const [membership, setMembership] = useState<MembershipInfo | null>(null);
+  const [fullName, setFullName] = useState<string | null>(null);
+  const [membershipLoading, setMembershipLoading] = useState(false);
+  const [redeeming, setRedeeming] = useState(false);
+  const [feedback, setFeedback] = useState<{
+    type: "error" | "success";
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => setIsLoggedIn(!!data?.user));
+      .then((data) => {
+        setUser(data?.user ?? null);
+        setIsLoggedIn(!!data?.user);
+      });
   }, []);
 
-  const canRedeem = isLoggedIn === true && aceptaTerminos && aceptaPoliticas;
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    setMembershipLoading(true);
+    fetch("/api/user/membership")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.membership) {
+          setMembership({
+            puntos: data.membership.puntos ?? null,
+            categoria: data.membership.categoria ?? null,
+          });
+        }
+        if (data?.fullName) setFullName(data.fullName);
+      })
+      .catch(() => setMembership(null))
+      .finally(() => setMembershipLoading(false));
+  }, [isLoggedIn]);
 
-  const voucherImage = voucher.image || PLACEHOLDER_IMAGE;
+  const requiredPoints = voucher.pointsValue ?? 0;
+  const userPoints = membership?.puntos ?? null;
+  const insufficientPoints =
+    isLoggedIn === true &&
+    userPoints !== null &&
+    requiredPoints > 0 &&
+    userPoints < requiredPoints;
+
+  const canRedeem =
+    isLoggedIn === true &&
+    aceptaTerminos &&
+    aceptaPoliticas &&
+    !redeeming &&
+    !insufficientPoints;
+
+  const handleRedeem = async () => {
+    if (!canRedeem) return;
+    setRedeeming(true);
+    setFeedback(null);
+    try {
+      const res = await fetch("/api/redemptions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voucherSlug: voucher.slug,
+          termsAcceptedAt: new Date().toISOString(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setFeedback({
+          type: "error",
+          message: data.error ?? "No se pudo completar la redención",
+        });
+        return;
+      }
+      setFeedback({
+        type: "success",
+        message: `¡Redención creada! N° ${data.zohoRedemptionId}. Saldo restante: ${data.newBalance} puntos.`,
+      });
+      setTimeout(() => router.push("/gracias"), 1500);
+    } catch (err) {
+      console.error(err);
+      setFeedback({
+        type: "error",
+        message: "Error de conexión. Intenta de nuevo.",
+      });
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
+  const voucherImage = voucher.image
+    ? urlFor(voucher.image).width(1600).url()
+    : PLACEHOLDER_IMAGE;
 
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -116,51 +171,61 @@ export default function VoucherDetailView() {
     <div>
       <Hero
         buttonText={isLoggedIn ? "Salida segura" : "Iniciar sesión"}
-        onClick={isLoggedIn ? logout : () => { window.location.href = "/auth/login"; }}
+        onClick={
+          isLoggedIn
+            ? logout
+            : () => {
+                window.location.href = "/auth/login";
+              }
+        }
       />
 
       <section className="w-full bg-white py-10 lg:py-14">
         <Container>
-          {/* Imagen del voucher - solo placeholder, sin overlays */}
-          <div className="relative w-full aspect-[3/1] overflow-hidden mb-10">
+          <div className="relative w-full overflow-hidden mb-10">
             <img
               src={voucherImage}
               alt={voucher.title}
-              className="w-full h-full object-cover"
+              className="w-full h-auto object-contain"
             />
-            <span className="absolute top-4 left-4 text-white text-xs font-medium bg-black/30 px-2 py-1 rounded">
-              VÁLIDO HASTA {voucher.validUntil || "DICIEMBRE 2025"}
-            </span>
+            {voucher.validUntil && (
+              <span className="absolute top-4 left-4 text-white text-xs font-medium bg-black/30 px-2 py-1 rounded">
+                VÁLIDO HASTA {formatValidUntil(voucher.validUntil)}
+              </span>
+            )}
           </div>
 
-          {/* Dos columnas: detalles (2/3) + perfil (1/3) */}
           <div className="flex flex-col lg:flex-row gap-10 lg:gap-26 mt-10 lg:mt-22">
-            {/* Columna izquierda - Detalles (~2/3) */}
             <div className="lg:w-2/3 space-y-8">
-              <DetailItem
-                icon={<FiFileText size={18} />}
-                title="Términos & condiciones"
-              >
-                {voucher.terms}
+              {voucher.terms && voucher.terms.length > 0 && (
+                <DetailItem
+                  icon={<FiFileText size={18} />}
+                  title="Términos & condiciones"
+                >
+                  <PortableText value={voucher.terms} />
+                </DetailItem>
+              )}
+              <DetailItem icon={<FiDollarSign size={18} />} title="Precio en COP">
+                {formatCOP(voucher.priceCOP) ?? "Consultar"}
               </DetailItem>
-              <DetailItem
-                icon={<FiDollarSign size={18} />}
-                title="Precio en COP"
-              >
-                {voucher.priceCOP || "Consultar"}
+              <DetailItem icon={<FiAward size={18} />} title="Valor en puntos">
+                {voucher.pointsValue != null
+                  ? `${voucher.pointsValue.toLocaleString("es-CO")} puntos`
+                  : "Consultar"}
               </DetailItem>
-              <DetailItem
-                icon={<FiAward size={18} />}
-                title="Valor en puntos"
-              >
-                {voucher.pointsValue || "Consultar"}
+              <DetailItem icon={<FiClock size={18} />} title="Tiempo de entrega">
+                {voucher.deliveryTime ?? "24-48 horas"}
               </DetailItem>
-              <DetailItem
-                icon={<FiClock size={18} />}
-                title="Tiempo de entrega"
-              >
-                {voucher.deliveryTime || "24-48 horas"}
-              </DetailItem>
+
+              {insufficientPoints && (
+                <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+                  No tienes puntos suficientes para redimir este voucher.
+                  Necesitas{" "}
+                  <strong>{requiredPoints.toLocaleString("es-CO")}</strong>{" "}
+                  puntos y tu saldo actual es{" "}
+                  <strong>{(userPoints ?? 0).toLocaleString("es-CO")}</strong>.
+                </div>
+              )}
 
               <div className="space-y-4 pt-2">
                 <label className="flex items-center gap-3 cursor-pointer select-none">
@@ -174,7 +239,14 @@ export default function VoucherDetailView() {
                   >
                     {aceptaTerminos && <FiCheck className="text-white" size={12} />}
                   </span>
-                  <span className="text-lg text-black font-bold">Acepto <Link href="/terminos-y-condiciones" className="underline hover:text-custom-green">términos y condiciones</Link>
+                  <span className="text-lg text-black font-bold">
+                    Acepto{" "}
+                    <Link
+                      href="/terminos-y-condiciones"
+                      className="underline hover:text-custom-green"
+                    >
+                      términos y condiciones
+                    </Link>
                   </span>
                 </label>
                 <label className="flex items-center gap-3 cursor-pointer select-none">
@@ -188,12 +260,19 @@ export default function VoucherDetailView() {
                   >
                     {aceptaPoliticas && <FiCheck className="text-white" size={12} />}
                   </span>
-                  <span className="text-lg text-black font-bold">Acepto <Link href="/politicas-de-privacidad" className="underline hover:text-custom-green">políticas de privacidad</Link></span>
+                  <span className="text-lg text-black font-bold">
+                    Acepto{" "}
+                    <Link
+                      href="/politicas-de-privacidad"
+                      className="underline hover:text-custom-green"
+                    >
+                      políticas de privacidad
+                    </Link>
+                  </span>
                 </label>
               </div>
             </div>
 
-            {/* Columna derecha - Perfil usuario (~1/3) */}
             <div className="lg:w-1/3 lg:min-w-[240px]">
               <div className="flex flex-col items-center lg:items-center text-center space-y-3 lg:sticky lg:top-4">
                 <div className="w-full aspect-[1/1] overflow-hidden bg-gray-300 shrink-0">
@@ -203,14 +282,46 @@ export default function VoucherDetailView() {
                     className="w-full h-full object-cover grayscale"
                   />
                 </div>
-                <p className="font-bold text-[#417D30] text-3xl">User Name profile</p>
-                <p className="text-4xl font-bold text-[#E85D04]">7000 points</p>
-                <p className="text-2xl text-gray-500">Category</p>
+
+                {isLoggedIn === null ? (
+                  <>
+                    <div className="h-9 w-3/4 rounded bg-gray-200 animate-pulse" />
+                    <div className="h-10 w-1/2 rounded bg-gray-200 animate-pulse" />
+                    <div className="h-7 w-1/3 rounded bg-gray-200 animate-pulse" />
+                  </>
+                ) : (
+                  <>
+                    {membershipLoading && fullName === null ? (
+                      <div className="h-9 w-3/4 rounded bg-gray-200 animate-pulse" />
+                    ) : (
+                      <p className="font-bold text-[#417D30] text-3xl">
+                        {fullName ?? user?.fullName ?? "Invitado"}
+                      </p>
+                    )}
+
+                    {membershipLoading ? (
+                      <div className="h-10 w-1/2 rounded bg-gray-200 animate-pulse" />
+                    ) : (
+                      <p className="text-4xl font-bold text-[#E85D04]">
+                        {membership?.puntos != null
+                          ? `${membership.puntos.toLocaleString("es-CO")} puntos`
+                          : "— puntos"}
+                      </p>
+                    )}
+
+                    {membershipLoading ? (
+                      <div className="h-7 w-1/3 rounded bg-gray-200 animate-pulse" />
+                    ) : (
+                      <p className="text-2xl text-gray-500">
+                        {membership?.categoria ?? ""}
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Botones */}
           <div className="flex flex-col sm:flex-row gap-6 mt-12 pt-8 justify-center">
             <Button
               variant="tertiary"
@@ -219,11 +330,13 @@ export default function VoucherDetailView() {
             >
               Volver
             </Button>
-            
+
             {isLoggedIn === false ? (
               <Button
                 variant="secondary"
-                onClick={() => { window.location.href = "/auth/login"; }}
+                onClick={() => {
+                  window.location.href = "/auth/login";
+                }}
                 className="sm:w-[160px] h-18 lg:min-w-[200px]"
               >
                 Iniciar sesión
@@ -231,15 +344,26 @@ export default function VoucherDetailView() {
             ) : (
               <Button
                 variant="secondary"
-                onClick={() => canRedeem && console.log("Canjear")}
+                onClick={handleRedeem}
                 disabled={!canRedeem}
                 className="sm:w-[160px] h-18 disabled:opacity-50 disabled:cursor-not-allowed lg:min-w-[200px]"
               >
-                Redimir
+                {redeeming ? "Procesando..." : "Redimir"}
               </Button>
             )}
-            
           </div>
+
+          {feedback && (
+            <div
+              className={`mt-6 max-w-xl mx-auto p-4 rounded-lg text-sm ${
+                feedback.type === "error"
+                  ? "bg-red-50 text-red-700"
+                  : "bg-green-50 text-green-700"
+              }`}
+            >
+              {feedback.message}
+            </div>
+          )}
         </Container>
       </section>
     </div>

@@ -9,12 +9,21 @@ interface HeroProps {
     buttonText?: string;
     onClick?: () => void;
     image?: string;
+    backgroundImage?: string;
 }
 
-export default function Hero({ title, description, buttonText, onClick, image, subtitle }: HeroProps) {
+export default function Hero({
+    title,
+    description,
+    buttonText,
+    onClick,
+    image,
+    subtitle,
+    backgroundImage,
+}: HeroProps) {
+  const bgUrl = backgroundImage || bgIntro.src
   return (
-    <section className="w-full bg-fixed bg-cover bg-center bg-no-repeat p-6 lg:p-12 flex-col text-center items-center justify-center text-white" style={{ backgroundImage: `url(${bgIntro.src})` }}>
-        {/* <img src={bgIntro.src} alt="bg-intro" /> */}
+    <section className="w-full bg-fixed bg-cover bg-center bg-no-repeat p-6 lg:p-12 flex-col text-center items-center justify-center text-white" style={{ backgroundImage: `url(${bgUrl})` }}>
         <div>
             <img className="w-full max-w-lg mx-auto" src={ image || imgAcumula.src } alt="img-acumula" />
         </div>

@@ -203,6 +203,90 @@ export async function getMembershipByEmail(
 }
 
 /**
+ * Trae un registro completo del módulo Redenciones por ID.
+ * A diferencia de /search, el GET individual sí incluye subformularios
+ * (p. ej. "Bitácora de redención").
+ * Devuelve el objeto crudo tal como lo entrega Zoho, para permitir
+ * inspección de nombres API de subforms cuando no se conocen.
+ */
+export async function getRedemptionById(
+  id: string
+): Promise<Record<string, unknown> | null> {
+  const token = await getZohoAccessToken();
+
+  const response = await fetch(
+    `${ZOHO_CRM_DOMAIN}/crm/v6/Redenciones/${id}`,
+    { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+  );
+
+  if (response.status === 204 || response.status === 404) return null;
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error("[Zoho] Error trayendo redención:", response.status, error);
+    throw new Error(`Zoho get redemption error: ${response.status} - ${error}`);
+  }
+
+  const result = (await response.json()) as {
+    data: Array<Record<string, unknown>>;
+  };
+  return result.data?.[0] ?? null;
+}
+
+export interface ZohoCreateRedemptionResponse {
+  data: Array<{
+    code: string;
+    status: string;
+    message: string;
+    details: { id: string; Created_Time?: string };
+  }>;
+}
+
+/**
+ * Crea un registro en el módulo Redenciones de Zoho.
+ * Devuelve el ID del nuevo registro (a guardar en Sanity).
+ */
+export async function createRedemptionInZoho(
+  membershipId: string,
+  points: number
+): Promise<{ id: string; createdTime?: string }> {
+  const token = await getZohoAccessToken();
+
+  const response = await fetch(`${ZOHO_CRM_DOMAIN}/crm/v6/Redenciones`, {
+    method: "POST",
+    headers: {
+      Authorization: `Zoho-oauthtoken ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      data: [
+        {
+          Redencion_Membresia: membershipId,
+          Puntos_a_Redimir: points,
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error("[Zoho] Error creando redención:", response.status, error);
+    throw new Error(`Zoho create redemption error: ${response.status} - ${error}`);
+  }
+
+  const result = (await response.json()) as ZohoCreateRedemptionResponse;
+  const record = result.data?.[0];
+  if (!record || record.status !== "success") {
+    throw new Error(`Zoho redemption failed: ${JSON.stringify(record)}`);
+  }
+
+  console.log(
+    `[Zoho] Redención creada: id=${record.details.id}, puntos=${points}, membresía=${membershipId}`
+  );
+  return { id: record.details.id, createdTime: record.details.Created_Time };
+}
+
+/**
  * Busca un contacto en Zoho CRM por email.
  * Retorna el contacto si existe, null si no.
  */
@@ -211,7 +295,17 @@ export async function searchContactByEmail(
 ): Promise<ZohoContact | null> {
   const token = await getZohoAccessToken();
 
-  const url = `${ZOHO_CRM_DOMAIN}/crm/v6/Contacts/search?email=${encodeURIComponent(email)}`;
+  const fields = [
+    "Full_Name",
+    "First_Name",
+    "Last_Name",
+    "Email",
+    "Estado",
+    "Estado_Fidelizaci_n",
+  ].join(",");
+  const url =
+    `${ZOHO_CRM_DOMAIN}/crm/v6/Contacts/search` +
+    `?email=${encodeURIComponent(email)}&fields=${fields}`;
 
   const response = await fetch(url, {
     headers: {

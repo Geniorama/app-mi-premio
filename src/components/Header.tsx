@@ -1,12 +1,13 @@
 "use client";
 
-import logo from "@/img/logo-mi-premio.svg";
+import logoDefault from "@/img/logo-mi-premio.svg";
 import Button from "@/utils/Button";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import iconUser from "@/img/user-check.svg";
 import { useRouter } from "next/navigation";
 import { FcMenu } from "react-icons/fc";
+import type { LinkItem } from "@/sanity/types";
 
 interface SessionUser {
   email: string;
@@ -14,10 +15,14 @@ interface SessionUser {
   contactId: string;
 }
 
-export default function Header() {
+interface HeaderProps {
+  logoUrl?: string;
+  nav?: LinkItem[];
+}
+
+export default function Header({ logoUrl, nav }: HeaderProps) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -33,16 +38,9 @@ export default function Header() {
     window.location.href = "/";
   };
 
-  const navItems = [
-    { label: "Inicio", href: "/" },
-    { label: "Catálogo", href: "/catalogo" },
-    ...(user
-      ? [
-          { label: "Mi perfil", href: "/perfil" },
-          { label: "Extractos", href: "/extractos" },
-        ]
-      : []),
-  ];
+  const navItems = (nav ?? []).filter((item) =>
+    item.requiresAuth ? !!user : true,
+  );
 
   return (
     <div className="w-full bg-white">
@@ -78,11 +76,10 @@ export default function Header() {
           <img
             className="w-full max-w-18 lg:max-w-28 cursor-pointer"
             onClick={() => router.push("/")}
-            src={logo.src}
+            src={logoUrl || logoDefault.src}
             alt="logo"
           />
 
-          {/* Toggle mobile menu */}
           <div className="lg:hidden">
             <button className="border border-slate-200 rounded-lg p-2 w-12 h-12 flex items-center justify-center">
               <FcMenu className="text-3xl" />
@@ -91,11 +88,12 @@ export default function Header() {
 
           <nav className="ml-16 hidden lg:block">
             <ul className="flex items-center gap-10">
-              {navItems.map((item) => (
-                <li key={item.label}>
+              {navItems.map((item, i) => (
+                <li key={`${item.label}-${i}`}>
                   <Link
                     className="text-black underline underline-offset-6 decoration-2 decoration-transparent hover:decoration-custom-green font-bold hover:text-custom-green transition-colors duration-300"
                     href={item.href}
+                    target={item.target ?? "_self"}
                   >
                     {item.label}
                   </Link>

@@ -4,51 +4,65 @@ import Hero from "@/components/Hero";
 import Container from "@/utils/Container";
 import OfferCard from "@/components/OfferCard";
 import Button from "@/utils/Button";
-const offers = [
-  {
-    id: "1",
-    image: "https://placehold.co/800x300/E85D04/white?text=VOUCHER",
-    title: "Voucher de experiencia",
-    handleClick: (id: string) => (window.location.href = `/catalogo/${id}`),
-  },
-  {
-    id: "2",
-    image: "https://placehold.co/800x300/E85D04/white?text=VOUCHER+2",
-    title: "Oferta 2",
-    handleClick: (id: string) => (window.location.href = `/catalogo/${id}`),
-  },
-  {
-    id: "3",
-    image: "https://placehold.co/800x300/E85D04/white?text=VOUCHER+3",
-    title: "Oferta 3",
-    handleClick: (id: string) => (window.location.href = `/catalogo/${id}`),
-  },
-];
+import { useRouter } from "next/navigation";
+import { urlFor } from "@/sanity/image";
+import type { CatalogoPage, VoucherCard } from "@/sanity/types";
 
-export default function CatalogoView() {
+interface CatalogoViewProps {
+  page: CatalogoPage | null;
+  vouchers: VoucherCard[];
+}
+
+const PLACEHOLDER = "https://placehold.co/800x300/E85D04/white?text=VOUCHER";
+
+export default function CatalogoView({ page, vouchers }: CatalogoViewProps) {
+  const router = useRouter();
+
+  const heroImage = page?.hero?.image ? urlFor(page.hero.image).width(600).url() : undefined;
+  const heroBg = page?.hero?.backgroundImage
+    ? urlFor(page.hero.backgroundImage).width(1920).url()
+    : undefined;
+
   return (
     <div>
-        <Hero />
+      <Hero
+        title={page?.hero?.title}
+        subtitle={page?.hero?.subtitle}
+        description={page?.hero?.description}
+        buttonText={page?.hero?.buttonText}
+        image={heroImage}
+        backgroundImage={heroBg}
+      />
 
-        <section className="w-full bg-white p-12 lg:py-24">
-            <Container>
-                <div className="space-y-16">
-                    {offers.map((offer) => (
-                        <OfferCard
-                          key={offer.id}
-                          id={offer.id}
-                          image={offer.image}
-                          title={offer.title}
-                          handleClick={() => offer.handleClick(offer.id)}
-                        />
-                    ))}
+      <section className="w-full bg-white p-12 lg:py-24">
+        <Container>
+          <div className="space-y-16">
+            {vouchers.length === 0 ? (
+              <p className="text-center text-gray-400">No hay vouchers disponibles.</p>
+            ) : (
+              vouchers.map((v) => (
+                <OfferCard
+                  key={v._id}
+                  id={v.slug}
+                  image={v.image ? urlFor(v.image).width(1600).url() : PLACEHOLDER}
+                  title={v.title}
+                  handleClick={() => router.push(`/catalogo/${v.slug}`)}
+                />
+              ))
+            )}
 
-                    <Button onClick={() => {}} className="w-full mx-auto mt-4" variant="secondary">
-                        Ver más
-                    </Button>
-                </div>
-            </Container>
-        </section>
+            {vouchers.length > 0 && (
+              <Button
+                onClick={() => {}}
+                className="w-full mx-auto mt-4"
+                variant="secondary"
+              >
+                {page?.loadMoreLabel ?? "Ver más"}
+              </Button>
+            )}
+          </div>
+        </Container>
+      </section>
     </div>
-  )
+  );
 }

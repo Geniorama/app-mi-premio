@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { parseSessionCookie, SESSION_COOKIE } from "@/lib/session";
-import { getMembershipByEmail, getRedemptionsByEmail } from "@/lib/zoho";
+import {
+  getMembershipByEmail,
+  getRedemptionsByEmail,
+  searchContactByEmail,
+} from "@/lib/zoho";
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -13,16 +17,26 @@ export async function GET() {
   }
 
   try {
-    const [membership, redemptions] = await Promise.all([
+    const [membership, redemptions, contact] = await Promise.all([
       getMembershipByEmail(user.email),
       getRedemptionsByEmail(user.email),
+      searchContactByEmail(user.email),
     ]);
 
+    const fullName =
+      contact?.Full_Name ||
+      [contact?.First_Name, contact?.Last_Name].filter(Boolean).join(" ") ||
+      user.fullName;
+
     if (!membership) {
-      return NextResponse.json({ membership: null, redemptions: [] }, { status: 200 });
+      return NextResponse.json(
+        { membership: null, redemptions: [], fullName },
+        { status: 200 }
+      );
     }
 
     return NextResponse.json({
+      fullName,
       membership: {
         id: membership.id,
         puntos: membership.Saldo_Puntos_Disponibles ?? null,
