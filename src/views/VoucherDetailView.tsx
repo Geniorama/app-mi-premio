@@ -74,6 +74,7 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
   const [fullName, setFullName] = useState<string | null>(null);
   const [membershipLoading, setMembershipLoading] = useState(false);
   const [redeeming, setRedeeming] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: "error" | "success";
     message: string;
@@ -123,6 +124,7 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
 
   const handleRedeem = async () => {
     if (!canRedeem) return;
+    setConfirmOpen(false);
     setRedeeming(true);
     setFeedback(null);
     try {
@@ -196,7 +198,11 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
           </div>
 
           <div className="flex flex-col lg:flex-row gap-10 lg:gap-26 mt-10 lg:mt-22">
-            <div className="lg:w-2/3 space-y-8">
+            <div
+              className={`space-y-8 ${
+                isLoggedIn === false ? "lg:w-full" : "lg:w-2/3"
+              }`}
+            >
               {voucher.terms && voucher.terms.length > 0 && (
                 <DetailItem
                   icon={<FiFileText size={18} />}
@@ -273,7 +279,8 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
               </div>
             </div>
 
-            <div className="lg:w-1/3 lg:min-w-[240px]">
+            {isLoggedIn !== false && (
+              <div className="lg:w-1/3 lg:min-w-[240px]">
               <div className="flex flex-col items-center lg:items-center text-center space-y-3 lg:sticky lg:top-4">
                 <div className="w-full aspect-[1/1] overflow-hidden bg-gray-300 shrink-0">
                   <img
@@ -319,7 +326,8 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
                   </>
                 )}
               </div>
-            </div>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col sm:flex-row gap-6 mt-12 pt-8 justify-center">
@@ -344,7 +352,7 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
             ) : (
               <Button
                 variant="secondary"
-                onClick={handleRedeem}
+                onClick={() => setConfirmOpen(true)}
                 disabled={!canRedeem}
                 className="sm:w-[160px] h-18 disabled:opacity-50 disabled:cursor-not-allowed lg:min-w-[200px]"
               >
@@ -366,6 +374,69 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
           )}
         </Container>
       </section>
+
+      {confirmOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-redeem-title"
+          onClick={() => !redeeming && setConfirmOpen(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3
+              id="confirm-redeem-title"
+              className="text-2xl font-bold text-custom-green"
+            >
+              Confirmar redención
+            </h3>
+            <div className="text-sm text-gray-700 space-y-2">
+              <p>
+                Vas a redimir <strong>{voucher.title}</strong> por{" "}
+                <strong>
+                  {requiredPoints.toLocaleString("es-CO")} puntos
+                </strong>
+                .
+              </p>
+              {userPoints !== null && (
+                <p>
+                  Saldo actual:{" "}
+                  <strong>{userPoints.toLocaleString("es-CO")}</strong> → saldo
+                  restante:{" "}
+                  <strong>
+                    {(userPoints - requiredPoints).toLocaleString("es-CO")}
+                  </strong>{" "}
+                  puntos.
+                </p>
+              )}
+              <p className="text-gray-500">
+                Esta acción no se puede deshacer.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row items-center gap-4 justify-center">
+              <button
+                type="button"
+                onClick={() => setConfirmOpen(false)}
+                disabled={redeeming}
+                className="text-sm text-gray-600 underline cursor-pointer hover:text-custom-green disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancelar
+              </button>
+              <Button
+                variant="secondary"
+                onClick={handleRedeem}
+                disabled={redeeming}
+                className="h-12 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {redeeming ? "Procesando..." : "Confirmar"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

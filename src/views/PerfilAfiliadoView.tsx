@@ -6,6 +6,9 @@ import BgSnap2 from "@/img/bg-snap-2.svg";
 import CarouselOffers from "@/components/CarouselOffers";
 import Button from "@/utils/Button";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { urlFor } from "@/sanity/image";
+import type { VoucherCard } from "@/sanity/types";
 
 interface UserSession {
   email: string;
@@ -19,7 +22,17 @@ interface Membership {
   categoria: string | null;
 }
 
-export default function PerfilAfiliadoView() {
+interface PerfilAfiliadoViewProps {
+  vouchers: VoucherCard[];
+}
+
+const VOUCHER_PLACEHOLDER =
+  "https://placehold.co/400x400/E85D04/white?text=VOUCHER";
+
+export default function PerfilAfiliadoView({
+  vouchers,
+}: PerfilAfiliadoViewProps) {
+  const router = useRouter();
   const [user, setUser] = useState<UserSession | null>(null);
   const [membership, setMembership] = useState<Membership | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,53 +47,17 @@ export default function PerfilAfiliadoView() {
       setLoading(false);
     });
   }, []);
-  const offers = [
-    {
-      id: "1",
-      image: "https://placehold.co/400x400",
-      title: "Title",
-      price: "$100 COP",
-      handleClick: () => {
-        console.log("click");
-      },
-    },
-    {
-      id: "2",
-      image: "https://placehold.co/400x400",
-      title: "Title",
-      price: "$100 COP",
-      handleClick: () => {
-        console.log("click");
-      },
-    },
-    {
-      id: "3",
-      image: "https://placehold.co/400x400",
-      title: "Title",
-      price: "$100 COP",
-      handleClick: () => {
-        console.log("click");
-      },
-    },
-    {
-      id: "4",
-      image: "https://placehold.co/400x400",
-      title: "Title",
-      price: "$100 COP",
-      handleClick: () => {
-        console.log("click");
-      },
-    },
-    {
-      id: "5",
-      image: "https://placehold.co/400x400",
-      title: "Title",
-      price: "$100 COP",
-      handleClick: () => {
-        console.log("click");
-      },
-    },
-  ];  
+  const offers = vouchers.map((v) => ({
+    id: v._id,
+    image: v.image ? urlFor(v.image).width(600).url() : VOUCHER_PLACEHOLDER,
+    title: v.title,
+    price:
+      v.pointsValue != null
+        ? `${v.pointsValue.toLocaleString("es-CO")} puntos`
+        : undefined,
+    handleClick: () => router.push(`/catalogo/${v.slug}`),
+  }));
+
   return (
     <div>
         <Hero />
@@ -137,10 +114,22 @@ export default function PerfilAfiliadoView() {
 
         <section className="p-12 lg:py-24">
             <Container>
-                <CarouselOffers offers={offers} />
-                <Button onClick={() => {}} className="w-full mx-auto mt-4" variant="secondary">
-                  Ver más
-                </Button>
+                {offers.length === 0 ? (
+                  <p className="text-center text-gray-400">
+                    No hay vouchers disponibles por ahora.
+                  </p>
+                ) : (
+                  <>
+                    <CarouselOffers offers={offers} />
+                    <Button
+                      onClick={() => router.push("/catalogo")}
+                      className="w-full mx-auto mt-4"
+                      variant="secondary"
+                    >
+                      Ver más
+                    </Button>
+                  </>
+                )}
             </Container>
         </section>
     </div>
