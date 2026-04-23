@@ -49,7 +49,12 @@ export default function Header({ logoUrl, nav }: HeaderProps) {
         {!isLoading &&
           (user ? (
             <div className="flex items-center justify-between gap-2 px-2">
-              <span className="text-white font-medium truncate">{user.fullName}</span>
+              <Link
+                href="/perfil"
+                className="text-white font-medium truncate hover:underline"
+              >
+                {user.fullName}
+              </Link>
               <Button variant="tertiary" onClick={handleLogout} className="h-8! uppercase shrink-0">
                 Salir
               </Button>
@@ -111,8 +116,13 @@ export default function Header({ logoUrl, nav }: HeaderProps) {
               <Button variant="secondary" className="whitespace-nowrap" onClick={handleLogout}>
                 Salida segura
               </Button>
-              <span className="text-black font-bold whitespace-nowrap">{user.fullName}</span>
-              <img className="w-6 h-6 ml-2" src={iconUser.src} alt="icon-user" />
+              <Link
+                href="/perfil"
+                className="flex items-center gap-2 text-black font-bold whitespace-nowrap hover:text-custom-green transition-colors"
+              >
+                {user.fullName}
+                <img className="w-6 h-6" src={iconUser.src} alt="icon-user" />
+              </Link>
             </div>
           ) : (
             <div className="flex items-center gap-4">

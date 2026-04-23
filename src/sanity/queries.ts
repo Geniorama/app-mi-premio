@@ -95,7 +95,7 @@ export const vouchersListQuery = groq`
 
 export const vouchersFeaturedQuery = groq`
   *[_type == "voucher" && active == true && featuredInPerfil == true]
-    | order(coalesce(order, 9999) asc, _createdAt desc){
+    | order(coalesce(order, 9999) asc, _createdAt desc)[0...12]{
     _id,
     title,
     "slug": slug.current,

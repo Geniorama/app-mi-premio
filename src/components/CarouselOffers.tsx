@@ -24,6 +24,7 @@ export default function CarouselOffers({ offers }: { offers: Offer[] }) {
     <Swiper
       modules={[Navigation, Pagination]}
       spaceBetween={50}
+      loop
       navigation
       pagination={{ clickable: true }}
       className="lg:p-12! [&_.swiper-pagination]:hidden [&_.swiper-pagination]:md:block"

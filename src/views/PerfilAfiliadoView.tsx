@@ -8,7 +8,7 @@ import Button from "@/utils/Button";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { urlFor } from "@/sanity/image";
-import type { VoucherCard } from "@/sanity/types";
+import type { PerfilPage, VoucherCard } from "@/sanity/types";
 
 interface UserSession {
   email: string;
@@ -24,6 +24,7 @@ interface Membership {
 
 interface PerfilAfiliadoViewProps {
   vouchers: VoucherCard[];
+  page: PerfilPage | null;
 }
 
 const VOUCHER_PLACEHOLDER =
@@ -31,6 +32,7 @@ const VOUCHER_PLACEHOLDER =
 
 export default function PerfilAfiliadoView({
   vouchers,
+  page,
 }: PerfilAfiliadoViewProps) {
   const router = useRouter();
   const [user, setUser] = useState<UserSession | null>(null);
@@ -58,9 +60,43 @@ export default function PerfilAfiliadoView({
     handleClick: () => router.push(`/catalogo/${v.slug}`),
   }));
 
+  const heroImage = page?.hero?.image
+    ? urlFor(page.hero.image).width(600).url()
+    : undefined;
+  const heroBg = page?.hero?.backgroundImage
+    ? urlFor(page.hero.backgroundImage).width(1920).url()
+    : undefined;
+  const profileImage = page?.profileImage
+    ? urlFor(page.profileImage).width(600).url()
+    : "https://placehold.co/400x600";
+  const suggested = page?.suggestedBlock;
+  const suggestedImage = suggested?.image
+    ? urlFor(suggested.image).width(1200).url()
+    : "https://placehold.co/1920x1080";
+  const loadMoreLabel = page?.carouselLoadMoreLabel;
+  const welcomeMessage =
+    page?.welcomeMessage ??
+    "lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
+  const suggestedTitle = suggested?.title ?? "Elemento sugerido";
+  const suggestedBody =
+    suggested?.body ??
+    "lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
+
   return (
     <div>
-        <Hero />
+        <Hero
+          title={page?.hero?.title}
+          subtitle={page?.hero?.subtitle}
+          description={page?.hero?.description}
+          buttonText={page?.hero?.buttonText}
+          image={heroImage}
+          backgroundImage={heroBg}
+          onClick={
+            page?.hero?.buttonLink
+              ? () => router.push(page.hero!.buttonLink!)
+              : undefined
+          }
+        />
         <section className="w-full bg-white p-12 lg:py-24 flex-col items-center justify-center bg-cover min-h-screen bg-center bg-no-repeat" style={{ backgroundImage: `url(${BgSnap2.src})` }}>
             <Container>
                 <div className="flex flex-col lg:flex-row items-center gap-10">
@@ -89,10 +125,12 @@ export default function PerfilAfiliadoView({
                          </>
                        )}
 
-                       <p className="mt-6 text-left">lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+                       <p className="mt-6 text-left whitespace-pre-line">
+                         {welcomeMessage}
+                       </p>
                     </div>
                     <div className="md:w-1/3 w-full">
-                       <img src="https://placehold.co/400x600" alt="image-example" className="w-full h-full object-cover" />
+                       <img src={profileImage} alt={page?.profileImage?.alt ?? "profile"} className="w-full h-full object-cover" />
                     </div>
                 </div>
             </Container>
@@ -102,11 +140,11 @@ export default function PerfilAfiliadoView({
           <Container>
             <div className="flex flex-col lg:flex-row items-center gap-10">
               <div className="md:w-1/2 w-full">
-                <img src="https://placehold.co/1920x1080" alt="image-example" className="w-full" />
+                <img src={suggestedImage} alt={suggestedTitle} className="w-full" />
               </div>
               <div className="md:w-1/2 w-full">
-                <h2 className="text-4xl font-bold mb-5 text-custom-green">Elemento  sugerido</h2>
-                <p>lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+                <h2 className="text-4xl font-bold mb-5 text-custom-green">{suggestedTitle}</h2>
+                <p className="whitespace-pre-line">{suggestedBody}</p>
               </div>
             </div>
           </Container>
@@ -121,13 +159,15 @@ export default function PerfilAfiliadoView({
                 ) : (
                   <>
                     <CarouselOffers offers={offers} />
-                    <Button
-                      onClick={() => router.push("/catalogo")}
-                      className="w-full mx-auto mt-4"
-                      variant="secondary"
-                    >
-                      Ver más
-                    </Button>
+                    {loadMoreLabel && (
+                      <Button
+                        onClick={() => router.push("/catalogo")}
+                        className="w-full mx-auto mt-4"
+                        variant="secondary"
+                      >
+                        {loadMoreLabel}
+                      </Button>
+                    )}
                   </>
                 )}
             </Container>

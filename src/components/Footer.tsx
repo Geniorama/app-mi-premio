@@ -5,6 +5,8 @@ import iconLinkedin from "@/img/linkedin-fill.svg";
 import iconYoutube from "@/img/youtube-fill.svg";
 import Link from "next/link";
 import Container from "@/utils/Container";
+import { FaWhatsapp } from "react-icons/fa";
+import { WHATSAPP_NUMBER, WHATSAPP_URL } from "@/utils/whatsapp";
 import type { LinkItem, SocialLink } from "@/sanity/types";
 
 interface FooterProps {
@@ -79,25 +81,42 @@ export default function Footer({
         </div>
 
         <div className="mt-12 text-center">
-          {social.length > 0 && (
-            <ul className="flex items-center justify-center gap-4">
-              {social.map((item) => (
-                <li key={item.platform}>
-                  <Link
-                    className="h-12 w-12 flex items-center justify-center bg-yellow-400 hover:bg-yellow-500 transition-colors duration-300 rounded-full"
-                    href={item.href}
-                    target="_blank"
-                  >
-                    <img
-                      src={SOCIAL_ICON[item.platform]}
-                      alt={item.platform}
-                      className="w-6 h-6"
-                    />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+          <ul className="flex items-center justify-center gap-4">
+            {social.map((item) => (
+              <li key={item.platform}>
+                <Link
+                  className="h-12 w-12 flex items-center justify-center bg-yellow-400 hover:bg-yellow-500 transition-colors duration-300 rounded-full"
+                  href={item.href}
+                  target="_blank"
+                >
+                  <img
+                    src={SOCIAL_ICON[item.platform]}
+                    alt={item.platform}
+                    className="w-6 h-6"
+                  />
+                </Link>
+              </li>
+            ))}
+            <li>
+              <Link
+                className="h-12 w-12 flex items-center justify-center bg-yellow-400 hover:bg-yellow-500 transition-colors duration-300 rounded-full"
+                href={WHATSAPP_URL}
+                target="_blank"
+                aria-label={`WhatsApp ${WHATSAPP_NUMBER}`}
+              >
+                <FaWhatsapp className="w-6 h-6 text-[#195308]" />
+              </Link>
+            </li>
+          </ul>
+
+          <a
+            href={WHATSAPP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block text-white mt-4 text-sm hover:underline"
+          >
+            WhatsApp: {WHATSAPP_NUMBER}
+          </a>
 
           {copyright && (
             <p className="text-white mt-8 text-sm">{copyright}</p>

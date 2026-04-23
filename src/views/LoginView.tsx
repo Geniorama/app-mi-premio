@@ -203,18 +203,6 @@ export default function LoginView() {
               </form>
             )}
           </div>
-
-          <div className="mt-12">
-            <ul className="flex items-center justify-center gap-4">
-                  {socialMedia.map((item) => (
-                      <li key={item.label}>
-                          <Link className="h-12 w-12 flex items-center justify-center bg-yellow-400 hover:bg-yellow-500 transition-colors duration-300 rounded-full" href={item.href}>
-                              <img src={item.icon.src} alt={item.label} className="w-6 h-6" />
-                          </Link>
-                      </li>
-                  ))}
-              </ul>
-          </div>
         </div>
       </Container>
     </div>

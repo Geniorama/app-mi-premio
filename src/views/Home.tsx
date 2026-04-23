@@ -26,7 +26,6 @@ export default function HomeView({ data }: HomeViewProps) {
 
   const featuresTitle =
     data?.featuresSection?.title ?? "Snap photos and share \nlike never before";
-
   const featureItems = data?.featuresSection?.items?.length
     ? data.featuresSection.items.map((item, i) => ({
         key: `cms-${i}`,

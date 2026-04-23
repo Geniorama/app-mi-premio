@@ -32,7 +32,9 @@ export default function Hero({
             <h5 className="text-lg lg:text-xl font-bold">{ subtitle || "Acumula puntos conviértelos en premios increíbles." }</h5>
             <p className="text-sm lg:text-base mt-4 lg:mt-6">{ description || "Mientras más participes, más ganas: canjea tus puntos por productos, descuentos o experiencias exclusivas." }</p>
 
-            <Button className="w-full mx-auto mt-4" onClick={ onClick || (() => {})}>{ buttonText || "Login" }</Button>
+            {buttonText && (
+              <Button className="w-full mx-auto mt-4" onClick={onClick || (() => {})}>{buttonText}</Button>
+            )}
         </div>
     </section>
   )

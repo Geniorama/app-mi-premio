@@ -2,7 +2,7 @@
 import Hero from "@/components/Hero";
 import Container from "@/utils/Container";
 import { useEffect, useState } from "react";
-import { FiTrendingUp, FiGift, FiStar, FiMinusCircle, FiX, FiFileText } from "react-icons/fi";
+import { FiTrendingUp, FiGift, FiStar, FiMinusCircle, FiX, FiFileText, FiDownload, FiCalendar } from "react-icons/fi";
 import { MdHotel } from "react-icons/md";
 
 const PAGE_SIZE = 10;
@@ -47,6 +47,30 @@ const formatDate = (dateStr: string | null) =>
         day: "numeric",
       })
     : "—";
+
+const escapeCSV = (value: string | number | null | undefined): string => {
+  if (value == null) return "";
+  const str = String(value);
+  if (/[",\n\r]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+  return str;
+};
+
+const downloadCSV = (filename: string, headers: string[], rows: (string | number | null)[][]) => {
+  const BOM = "﻿";
+  const csv = [
+    headers.map(escapeCSV).join(","),
+    ...rows.map((row) => row.map(escapeCSV).join(",")),
+  ].join("\r\n");
+  const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
 
 const estadoBadge = (estado: string | null, colores: Record<string, string>) => {
   const cls = colores[estado ?? ""] ?? "bg-gray-100 text-gray-600";
@@ -143,13 +167,47 @@ export default function ExtractosView() {
   const [detalleOpen, setDetalleOpen] = useState(false);
   const [filtroAcumulados, setFiltroAcumulados] = useState<string | null>(null);
   const [filtroRedimidos, setFiltroRedimidos] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<"all" | "today" | "week" | "month" | "custom">("all");
+  const [customFrom, setCustomFrom] = useState<string>("");
+  const [customTo, setCustomTo] = useState<string>("");
 
-  const acumuladosFiltrados = filtroAcumulados
-    ? puntosAcumulados.filter((p) => p.estado === filtroAcumulados)
-    : puntosAcumulados;
-  const redimidosFiltrados = filtroRedimidos
-    ? redemptions.filter((r) => r.estado === filtroRedimidos)
-    : redemptions;
+  const dateInRange = (dateStr: string | null): boolean => {
+    if (dateRange === "all") return true;
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return false;
+
+    if (dateRange === "custom") {
+      if (customFrom) {
+        const from = new Date(customFrom);
+        if (d < from) return false;
+      }
+      if (customTo) {
+        const to = new Date(customTo);
+        to.setHours(23, 59, 59, 999);
+        if (d > to) return false;
+      }
+      return true;
+    }
+
+    const now = new Date();
+    const start = new Date(now);
+    if (dateRange === "today") {
+      start.setHours(0, 0, 0, 0);
+    } else if (dateRange === "week") {
+      start.setDate(now.getDate() - 7);
+    } else if (dateRange === "month") {
+      start.setMonth(now.getMonth() - 1);
+    }
+    return d >= start && d <= now;
+  };
+
+  const acumuladosFiltrados = puntosAcumulados
+    .filter((p) => (filtroAcumulados ? p.estado === filtroAcumulados : true))
+    .filter((p) => dateInRange(p.fechaEntrega));
+  const redimidosFiltrados = redemptions
+    .filter((r) => (filtroRedimidos ? r.estado === filtroRedimidos : true))
+    .filter((r) => dateInRange(r.fecha));
 
   const acumuladosPag = usePagination(acumuladosFiltrados);
   const redemcionesPag = usePagination(redimidosFiltrados);
@@ -159,6 +217,31 @@ export default function ExtractosView() {
     value: string,
     setter: (v: string | null) => void
   ) => setter(current === value ? null : value);
+
+  const today = () => new Date().toISOString().slice(0, 10);
+
+  const descargarAcumulados = () => {
+    downloadCSV(
+      `puntos-acumulados-${today()}.csv`,
+      ["N°", "OC", "Puntos entregados", "Fecha entrega", "Vencimiento", "Estado"],
+      acumuladosFiltrados.map((p) => [
+        p.numero,
+        p.entregaOC,
+        p.puntosEntregados,
+        p.fechaEntrega,
+        p.fechaVencimiento,
+        p.estado,
+      ])
+    );
+  };
+
+  const descargarRedimidos = () => {
+    downloadCSV(
+      `puntos-redimidos-${today()}.csv`,
+      ["N°", "Fecha", "Puntos redimidos", "Estado"],
+      redimidosFiltrados.map((r) => [r.numero, r.fecha, r.puntos, r.estado])
+    );
+  };
 
   useEffect(() => {
     fetch("/api/user/membership")
@@ -171,15 +254,15 @@ export default function ExtractosView() {
       });
   }, []);
 
-  const puntosPorHotel = puntosAcumulados.reduce<
-    Record<string, { puntos: number; registros: number }>
-  >((acc, p) => {
-    const hotel = extractHotelName(p.entregaOC) ?? "Sin hotel";
-    if (!acc[hotel]) acc[hotel] = { puntos: 0, registros: 0 };
-    acc[hotel].puntos += p.puntosEntregados ?? 0;
-    acc[hotel].registros += 1;
-    return acc;
-  }, {});
+  const puntosPorHotel = puntosAcumulados
+    .filter((p) => p.estado === "Aprobado" || p.estado === "Parcial Aprobado")
+    .reduce<Record<string, { puntos: number; registros: number }>>((acc, p) => {
+      const hotel = extractHotelName(p.entregaOC) ?? "Sin hotel";
+      if (!acc[hotel]) acc[hotel] = { puntos: 0, registros: 0 };
+      acc[hotel].puntos += p.puntosEntregados ?? 0;
+      acc[hotel].registros += 1;
+      return acc;
+    }, {});
   const hotelesOrdenados = Object.entries(puntosPorHotel).sort(
     (a, b) => b[1].puntos - a[1].puntos
   );
@@ -355,17 +438,99 @@ export default function ExtractosView() {
             </div>
 
             <div className="overflow-y-auto p-6 space-y-12">
+              {/* Filtro por fechas */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-5">
+                <h4 className="flex items-center gap-2 text-base font-bold text-custom-green mb-4">
+                  <FiCalendar size={18} className="shrink-0" />
+                  Rango de fechas
+                </h4>
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  {[
+                    { value: "all", label: "Todos" },
+                    { value: "today", label: "Hoy" },
+                    { value: "week", label: "Última semana" },
+                    { value: "month", label: "Último mes" },
+                    { value: "custom", label: "Personalizado" },
+                  ].map(({ value, label }) => {
+                    const active = dateRange === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() =>
+                          setDateRange(value as typeof dateRange)
+                        }
+                        aria-pressed={active}
+                        className={`px-4 py-2 text-sm rounded-full font-medium cursor-pointer transition-colors border ${
+                          active
+                            ? "bg-custom-green text-white border-custom-green"
+                            : "bg-white text-gray-700 border-gray-200 hover:border-custom-green hover:text-custom-green"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {dateRange === "custom" && (
+                  <div className="flex flex-wrap items-center gap-3 text-sm mt-4 pt-4 border-t border-slate-200">
+                    <label className="flex items-center gap-2 text-gray-700 font-medium">
+                      Desde
+                      <input
+                        type="date"
+                        value={customFrom}
+                        onChange={(e) => setCustomFrom(e.target.value)}
+                        className="border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-custom-green"
+                      />
+                    </label>
+                    <label className="flex items-center gap-2 text-gray-700 font-medium">
+                      Hasta
+                      <input
+                        type="date"
+                        value={customTo}
+                        onChange={(e) => setCustomTo(e.target.value)}
+                        className="border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-custom-green"
+                      />
+                    </label>
+                    {(customFrom || customTo) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomFrom("");
+                          setCustomTo("");
+                        }}
+                        className="text-gray-500 underline cursor-pointer hover:text-custom-green"
+                      >
+                        Limpiar
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Puntos Acumulados */}
               <div>
-                <h3 className="text-xl font-bold mb-4 text-custom-green flex items-center gap-3">
-                  <FiTrendingUp className="shrink-0" />
-                  Puntos acumulados
-                </h3>
+                <div className="flex items-center justify-between gap-4 mb-4">
+                  <h3 className="text-xl font-bold text-custom-green flex items-center gap-3">
+                    <FiTrendingUp className="shrink-0" />
+                    Puntos acumulados
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={descargarAcumulados}
+                    disabled={acumuladosFiltrados.length === 0}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded border border-custom-green text-custom-green hover:bg-custom-green hover:text-white transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <FiDownload size={14} />
+                    Descargar CSV
+                  </button>
+                </div>
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-6 text-xs text-gray-600">
                   {[
                     { estado: "Aprobado", desc: "Disponibles para redimir", cls: "bg-green-100 text-green-700" },
+                    { estado: "Parcial Aprobado", desc: "Saldo parcial tras redención", cls: "bg-emerald-100 text-emerald-700" },
                     { estado: "Entregado", desc: "Ya consumidos en redenciones", cls: "bg-orange-100 text-orange-700" },
-                    { estado: "Cancelado", desc: "Anulados y no disponibles", cls: "bg-red-100 text-red-600" },
+                    { estado: "Cancelado", desc: "Vencidos y anulados", cls: "bg-red-100 text-red-600" },
                   ].map(({ estado, desc, cls }) => {
                     const active = filtroAcumulados === estado;
                     const otherActive = filtroAcumulados !== null && !active;
@@ -437,6 +602,7 @@ export default function ExtractosView() {
                                   "Entregado": "bg-orange-100 text-orange-700",
                                   "Cancelado": "bg-red-100 text-red-600",
                                   "Aprobado": "bg-green-100 text-green-700",
+                                  "Parcial Aprobado": "bg-emerald-100 text-emerald-700",
                                 })}
                               </td>
                             </tr>
@@ -456,10 +622,21 @@ export default function ExtractosView() {
 
               {/* Puntos Redimidos */}
               <div>
-                <h3 className="text-xl font-bold mb-4 text-custom-green flex items-center gap-3">
-                  <FiGift className="shrink-0" />
-                  Puntos redimidos
-                </h3>
+                <div className="flex items-center justify-between gap-4 mb-4">
+                  <h3 className="text-xl font-bold text-custom-green flex items-center gap-3">
+                    <FiGift className="shrink-0" />
+                    Puntos redimidos
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={descargarRedimidos}
+                    disabled={redimidosFiltrados.length === 0}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded border border-custom-green text-custom-green hover:bg-custom-green hover:text-white transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <FiDownload size={14} />
+                    Descargar CSV
+                  </button>
+                </div>
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-6 text-xs text-gray-600">
                   {[
                     { estado: "Pendiente", desc: "Redención en curso", cls: "bg-yellow-100 text-yellow-700" },
