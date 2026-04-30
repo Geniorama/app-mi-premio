@@ -11,11 +11,30 @@ const ZEPTOMAIL_URL =
 
 export async function sendLoginCodeEmail(
   to: string,
-  code: string
+  code: string,
+  options?: { baseUrl?: string }
 ): Promise<{ success: boolean; error?: string }> {
   const subject = "Tu código de verificación - Mi Premio";
+  const appUrl = (
+    options?.baseUrl ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "https://mipremio.com.co"
+  ).replace(/\/$/, "");
+  const miPremioLogo = `${appUrl}/logo-mi-premio.svg`;
+  const partnerLogo =
+    "https://media.licdn.com/dms/image/v2/C4D0BAQHJaCxl6amgNw/company-logo_200_200/company-logo_200_200/0/1674594799365?e=2147483647&v=beta&t=t8qXZDeLmZGAPG1_Xt9LMFvrURUfd3tnktwxQsIMgto";
   const htmlBody = `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px; border-bottom: 1px solid #eee;">
+        <tr>
+          <td align="left" style="padding: 16px 0;">
+            <img src="${miPremioLogo}" alt="Mi Premio" width="64" height="64" style="display:block; height:64px; width:auto;" />
+          </td>
+          <td align="right" style="padding: 16px 0;">
+            <img src="${partnerLogo}" alt="Partner" width="64" height="64" style="display:block; height:64px; width:auto;" />
+          </td>
+        </tr>
+      </table>
       <h2 style="color: #417D30;">Tu código de verificación</h2>
       <p>Ingresa el siguiente código para iniciar sesión:</p>
       <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px; color: #417D30;">${code}</p>

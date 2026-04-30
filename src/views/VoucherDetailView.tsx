@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
   FiFileText,
-  FiDollarSign,
   FiAward,
   FiClock,
   FiCheck,
@@ -49,9 +48,6 @@ const formatValidUntil = (dateStr?: string) => {
     .toLocaleDateString("es-CO", { month: "long", year: "numeric" })
     .toUpperCase();
 };
-
-const formatCOP = (value?: number) =>
-  value != null ? `$${value.toLocaleString("es-CO")} COP` : undefined;
 
 interface SessionUser {
   email: string;
@@ -211,9 +207,6 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
                   <PortableText value={voucher.terms} />
                 </DetailItem>
               )}
-              <DetailItem icon={<FiDollarSign size={18} />} title="Precio en COP">
-                {formatCOP(voucher.priceCOP) ?? "Consultar"}
-              </DetailItem>
               <DetailItem icon={<FiAward size={18} />} title="Valor en puntos">
                 {voucher.pointsValue != null
                   ? `${voucher.pointsValue.toLocaleString("es-CO")} puntos`
