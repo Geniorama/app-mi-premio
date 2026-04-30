@@ -24,14 +24,12 @@ export async function sendLoginCodeEmail(
   const partnerLogo =
     "https://media.licdn.com/dms/image/v2/C4D0BAQHJaCxl6amgNw/company-logo_200_200/company-logo_200_200/0/1674594799365?e=2147483647&v=beta&t=t8qXZDeLmZGAPG1_Xt9LMFvrURUfd3tnktwxQsIMgto";
   const htmlBody = `
-    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; text-align: center;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px; border-bottom: 1px solid #eee;">
         <tr>
-          <td align="left" style="padding: 16px 0;">
-            <img src="${miPremioLogo}" alt="Mi Premio" width="64" height="64" style="display:block; height:64px; width:auto;" />
-          </td>
-          <td align="right" style="padding: 16px 0;">
-            <img src="${partnerLogo}" alt="Partner" width="64" height="64" style="display:block; height:64px; width:auto;" />
+          <td align="center" style="padding: 16px 0;">
+            <img src="${miPremioLogo}" alt="Mi Premio" width="64" height="64" style="display:inline-block; height:64px; width:auto; vertical-align: middle; margin: 0 12px;" />
+            <img src="${partnerLogo}" alt="Partner" width="84" height="84" style="display:inline-block; height:84px; width:auto; vertical-align: middle; margin: 0 12px;" />
           </td>
         </tr>
       </table>
