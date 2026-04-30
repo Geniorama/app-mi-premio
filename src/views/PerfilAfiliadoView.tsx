@@ -7,8 +7,10 @@ import CarouselOffers from "@/components/CarouselOffers";
 import Button from "@/utils/Button";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { urlFor } from "@/sanity/image";
+import { urlFor, buildImageSet } from "@/sanity/image";
 import type { PerfilPage, VoucherCard } from "@/sanity/types";
+
+const VOUCHER_CARD_WIDTHS = [320, 480, 640, 800];
 
 interface UserSession {
   email: string;
@@ -49,30 +51,36 @@ export default function PerfilAfiliadoView({
       setLoading(false);
     });
   }, []);
-  const offers = vouchers.map((v) => ({
-    id: v._id,
-    image: v.image ? urlFor(v.image).width(600).url() : VOUCHER_PLACEHOLDER,
-    title: v.title,
-    price:
-      v.pointsValue != null
-        ? `${v.pointsValue.toLocaleString("es-CO")} puntos`
-        : undefined,
-    handleClick: () => router.push(`/catalogo/${v.slug}`),
-  }));
+  const offers = vouchers.map((v) => {
+    const imgSet = v.image ? buildImageSet(v.image, VOUCHER_CARD_WIDTHS) : null;
+    return {
+      id: v._id,
+      image: imgSet?.src ?? VOUCHER_PLACEHOLDER,
+      imageSrcSet: imgSet?.srcSet,
+      title: v.title,
+      price:
+        v.pointsValue != null
+          ? `${v.pointsValue.toLocaleString("es-CO")} puntos`
+          : undefined,
+      handleClick: () => router.push(`/catalogo/${v.slug}`),
+    };
+  });
 
-  const heroImage = page?.hero?.image
-    ? urlFor(page.hero.image).width(600).url()
-    : undefined;
+  const heroSet = page?.hero?.image
+    ? buildImageSet(page.hero.image, [320, 480, 640, 800])
+    : null;
   const heroBg = page?.hero?.backgroundImage
-    ? urlFor(page.hero.backgroundImage).width(1920).url()
+    ? urlFor(page.hero.backgroundImage).width(1920).auto("format").url()
     : undefined;
-  const profileImage = page?.profileImage
-    ? urlFor(page.profileImage).width(600).url()
-    : "https://placehold.co/400x600";
+  const profileSet = page?.profileImage
+    ? buildImageSet(page.profileImage, [320, 480, 640, 800])
+    : null;
+  const profileImage = profileSet?.src ?? "https://placehold.co/400x600";
   const suggested = page?.suggestedBlock;
-  const suggestedImage = suggested?.image
-    ? urlFor(suggested.image).width(1200).url()
-    : "https://placehold.co/1920x1080";
+  const suggestedSet = suggested?.image
+    ? buildImageSet(suggested.image, [400, 600, 800, 1024, 1200])
+    : null;
+  const suggestedImage = suggestedSet?.src ?? "https://placehold.co/1920x1080";
   const loadMoreLabel = page?.carouselLoadMoreLabel;
   const welcomeMessage =
     page?.welcomeMessage ??
@@ -89,7 +97,8 @@ export default function PerfilAfiliadoView({
           subtitle={page?.hero?.subtitle}
           description={page?.hero?.description}
           buttonText={page?.hero?.buttonText}
-          image={heroImage}
+          image={heroSet?.src}
+          imageSrcSet={heroSet?.srcSet}
           backgroundImage={heroBg}
           onClick={
             page?.hero?.buttonLink
@@ -130,7 +139,15 @@ export default function PerfilAfiliadoView({
                        </p>
                     </div>
                     <div className="md:w-1/3 w-full">
-                       <img src={profileImage} alt={page?.profileImage?.alt ?? "profile"} className="w-full h-full object-cover" />
+                       <img
+                         src={profileImage}
+                         srcSet={profileSet?.srcSet}
+                         sizes="(min-width: 1024px) 33vw, (min-width: 768px) 33vw, 100vw"
+                         alt={page?.profileImage?.alt ?? "profile"}
+                         loading="lazy"
+                         decoding="async"
+                         className="w-full h-full object-cover"
+                       />
                     </div>
                 </div>
             </Container>
@@ -140,7 +157,15 @@ export default function PerfilAfiliadoView({
           <Container>
             <div className="flex flex-col lg:flex-row items-center gap-10">
               <div className="md:w-1/2 w-full">
-                <img src={suggestedImage} alt={suggestedTitle} className="w-full" />
+                <img
+                  src={suggestedImage}
+                  srcSet={suggestedSet?.srcSet}
+                  sizes="(min-width: 1024px) 50vw, 100vw"
+                  alt={suggestedTitle}
+                  loading="lazy"
+                  decoding="async"
+                  className="w-full"
+                />
               </div>
               <div className="md:w-1/2 w-full">
                 <h2 className="text-4xl font-bold mb-5 text-custom-green">{suggestedTitle}</h2>

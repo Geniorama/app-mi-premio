@@ -7,7 +7,7 @@ import Container from "@/utils/Container";
 import imageExample from "@/img/image-example.webp";
 import { useEffect, useState } from "react";
 import Hero from "@/components/Hero";
-import { urlFor } from "@/sanity/image";
+import { urlFor, buildImageSet } from "@/sanity/image";
 import type { HomePage } from "@/sanity/types";
 
 interface HomeViewProps {
@@ -38,13 +38,16 @@ export default function HomeView({ data }: HomeViewProps) {
     : FALLBACK_ITEMS;
 
   const contentBlock = data?.contentBlock;
-  const contentImage = contentBlock?.image
-    ? urlFor(contentBlock.image).width(1200).url()
-    : imageExample.src;
+  const contentSet = contentBlock?.image
+    ? buildImageSet(contentBlock.image, [400, 600, 800, 1024, 1200])
+    : null;
+  const contentImage = contentSet?.src ?? imageExample.src;
 
-  const heroImage = data?.hero?.image ? urlFor(data.hero.image).width(600).url() : undefined;
+  const heroSet = data?.hero?.image
+    ? buildImageSet(data.hero.image, [320, 480, 640, 800])
+    : null;
   const heroBg = data?.hero?.backgroundImage
-    ? urlFor(data.hero.backgroundImage).width(1920).url()
+    ? urlFor(data.hero.backgroundImage).width(1920).auto("format").url()
     : undefined;
 
   return (
@@ -54,7 +57,8 @@ export default function HomeView({ data }: HomeViewProps) {
         subtitle={data?.hero?.subtitle}
         description={data?.hero?.description}
         buttonText={data?.hero?.buttonText}
-        image={heroImage}
+        image={heroSet?.src}
+        imageSrcSet={heroSet?.srcSet}
         backgroundImage={heroBg}
       />
 
@@ -93,7 +97,14 @@ export default function HomeView({ data }: HomeViewProps) {
         <Container>
           <div className="flex flex-col lg:flex-row items-center gap-10">
             <div className="md:w-1/2 w-full">
-              <img src={contentImage} alt={contentBlock?.title ?? "image"} />
+              <img
+                src={contentImage}
+                srcSet={contentSet?.srcSet}
+                sizes="(min-width: 1024px) 600px, (min-width: 768px) 50vw, 100vw"
+                alt={contentBlock?.title ?? "image"}
+                loading="lazy"
+                decoding="async"
+              />
             </div>
             <div className="md:w-1/2 w-full">
               <h3 className="text-2xl font-bold mb-5 text-custom-green">

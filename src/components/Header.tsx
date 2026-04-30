@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import iconUser from "@/img/user-check.svg";
 import { useRouter } from "next/navigation";
-import { FcMenu } from "react-icons/fc";
+import { FiMenu, FiX } from "react-icons/fi";
 import type { LinkItem } from "@/sanity/types";
 
 interface SessionUser {
@@ -23,6 +23,7 @@ interface HeaderProps {
 export default function Header({ logoUrl, nav }: HeaderProps) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -60,15 +61,18 @@ export default function Header({ logoUrl, nav }: HeaderProps) {
               </Button>
             </div>
           ) : (
-            <div className="flex items-center gap-3 px-2">
+            <div className="flex items-center justify-end gap-4 px-2">
               <Link
                 href="/registro"
-                className="shrink-0 text-sm font-bold uppercase text-white underline underline-offset-4 decoration-white/80 hover:decoration-white"
+                className="text-sm font-bold uppercase text-white underline underline-offset-4 decoration-white/80 hover:decoration-white"
               >
                 Registro
               </Link>
-              <Link href="/auth/login" className="min-w-0 flex-1">
-                <Button variant="secondary" className="w-full h-8! uppercase">
+              <Link href="/auth/login">
+                <Button
+                  variant="tertiary"
+                  className="!w-auto !h-8 !md:w-auto px-4 text-xs uppercase font-bold rounded-md shadow-none"
+                >
                   Login
                 </Button>
               </Link>
@@ -76,7 +80,7 @@ export default function Header({ logoUrl, nav }: HeaderProps) {
           ))}
       </div>
 
-      <div className="w-full max-w-[1600px] mx-auto flex items-center justify-between py-3 px-4 lg:px-6">
+      <div className="relative w-full max-w-[1600px] mx-auto flex items-center justify-between py-3 px-4 lg:px-6">
         <div className="flex justify-between items-center lg:justify-start w-full gap-4 px-2 lg:px-0">
           <img
             className="w-full max-w-18 lg:max-w-28 cursor-pointer"
@@ -86,8 +90,19 @@ export default function Header({ logoUrl, nav }: HeaderProps) {
           />
 
           <div className="lg:hidden">
-            <button className="border border-slate-200 rounded-lg p-2 w-12 h-12 flex items-center justify-center">
-              <FcMenu className="text-3xl" />
+            <button
+              type="button"
+              aria-label={isMenuOpen ? "Cerrar menú" : "Abrir menú"}
+              aria-expanded={isMenuOpen}
+              aria-controls="mobile-nav"
+              onClick={() => setIsMenuOpen((v) => !v)}
+              className="border border-slate-200 rounded-lg p-2 w-12 h-12 flex items-center justify-center cursor-pointer hover:bg-slate-50 transition-colors"
+            >
+              {isMenuOpen ? (
+                <FiX className="text-2xl text-custom-green" />
+              ) : (
+                <FiMenu className="text-2xl text-custom-green" />
+              )}
             </button>
           </div>
 
@@ -107,6 +122,28 @@ export default function Header({ logoUrl, nav }: HeaderProps) {
             </ul>
           </nav>
         </div>
+
+        {isMenuOpen && (
+          <nav
+            id="mobile-nav"
+            className="lg:hidden absolute left-0 right-0 top-full z-40 bg-white border-t border-slate-200 shadow-lg"
+          >
+            <ul className="flex flex-col py-2">
+              {navItems.map((item, i) => (
+                <li key={`m-${item.label}-${i}`}>
+                  <Link
+                    href={item.href}
+                    target={item.target ?? "_self"}
+                    onClick={() => setIsMenuOpen(false)}
+                    className="block px-6 py-3 text-black font-bold hover:bg-slate-50 hover:text-custom-green transition-colors"
+                  >
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
 
         <div className="hidden lg:flex items-center">
           {isLoading ? (

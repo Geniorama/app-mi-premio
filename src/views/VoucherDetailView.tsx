@@ -13,7 +13,7 @@ import {
 } from "react-icons/fi";
 import Link from "next/link";
 import { PortableText } from "@portabletext/react";
-import { urlFor } from "@/sanity/image";
+import { buildImageSet } from "@/sanity/image";
 import type { Voucher } from "@/sanity/types";
 
 interface DetailItemProps {
@@ -156,9 +156,10 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
     }
   };
 
-  const voucherImage = voucher.image
-    ? urlFor(voucher.image).width(1600).url()
-    : PLACEHOLDER_IMAGE;
+  const voucherSet = voucher.image
+    ? buildImageSet(voucher.image, [400, 640, 800, 1024, 1280, 1600])
+    : null;
+  const voucherImage = voucherSet?.src ?? PLACEHOLDER_IMAGE;
 
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -183,7 +184,10 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
           <div className="relative w-full overflow-hidden mb-10">
             <img
               src={voucherImage}
+              srcSet={voucherSet?.srcSet}
+              sizes="(min-width: 1600px) 1600px, 100vw"
               alt={voucher.title}
+              decoding="async"
               className="w-full h-auto object-contain"
             />
             {voucher.validUntil && (

@@ -11,6 +11,8 @@ import "swiper/css/pagination";
 export interface Offer {
   id: string;
   image: string;
+  imageSrcSet?: string;
+  imageSizes?: string;
   title: string;
   price?: string;
   handleClick?: () => void;
@@ -50,7 +52,15 @@ export default function CarouselOffers({ offers }: { offers: Offer[] }) {
               className="text-center space-y-2 cursor-pointer transition-transform duration-300 hover:scale-110 origin-center"
               onClick={() => handleClick(offer)}
             >
-                <img src={offer.image} alt={offer.title} className="w-full" />
+                <img
+                  src={offer.image}
+                  srcSet={offer.imageSrcSet}
+                  sizes={offer.imageSizes ?? "(min-width: 1024px) 25vw, (min-width: 768px) 50vw, 100vw"}
+                  alt={offer.title}
+                  loading="lazy"
+                  decoding="async"
+                  className="w-full"
+                />
                 <h3 className="text-xl font-bold">{offer.title}</h3>
                 <span className="font-bold text-xl">{offer.price}</span>
             </div>
