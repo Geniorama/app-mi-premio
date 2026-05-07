@@ -2,8 +2,11 @@
 import Hero from "@/components/Hero";
 import Container from "@/utils/Container";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { FiTrendingUp, FiGift, FiStar, FiMinusCircle, FiX, FiFileText, FiDownload, FiCalendar } from "react-icons/fi";
 import { MdHotel } from "react-icons/md";
+import { urlFor, buildImageSet } from "@/sanity/image";
+import type { ExtractosPage } from "@/sanity/types";
 
 const PAGE_SIZE = 10;
 
@@ -159,7 +162,12 @@ function Pagination({ page, totalPages, total, onPage }: PaginationProps) {
   );
 }
 
-export default function ExtractosView() {
+interface ExtractosViewProps {
+  page: ExtractosPage | null;
+}
+
+export default function ExtractosView({ page }: ExtractosViewProps) {
+  const router = useRouter();
   const [puntosAcumulados, setPuntosAcumulados] = useState<PuntoAcumulado[]>([]);
   const [redemptions, setRedemptions] = useState<Redemption[]>([]);
   const [saldoPuntos, setSaldoPuntos] = useState<number | null>(null);
@@ -272,32 +280,66 @@ export default function ExtractosView() {
     0
   );
 
+  const heroSet = page?.hero?.image
+    ? buildImageSet(page.hero.image, [320, 480, 640, 800])
+    : null;
+  const heroBg = page?.hero?.backgroundImage
+    ? urlFor(page.hero.backgroundImage).width(1920).auto("format").url()
+    : undefined;
+
+  const motivation = page?.motivationBlock;
+  const motivationSet = motivation?.image
+    ? buildImageSet(motivation.image, [400, 600, 800, 1024, 1200])
+    : null;
+
   return (
     <div>
       <Hero
-        title="Extractos"
-        description="Aquí puedes ver tu historial de redenciones de puntos."
-        buttonText="Ver extractos"
-        onClick={() => {}}
+        title={page?.hero?.title}
+        subtitle={page?.hero?.subtitle}
+        description={page?.hero?.description}
+        buttonText={page?.hero?.buttonText}
+        image={heroSet?.src}
+        imageSrcSet={heroSet?.srcSet}
+        backgroundImage={heroBg}
+        onClick={
+          page?.hero?.buttonLink
+            ? () => router.push(page.hero!.buttonLink!)
+            : undefined
+        }
       />
 
-      <section className="bg-slate-900 text-white p-6 lg:p-12 lg:py-24">
-        <Container>
-          <div className="flex flex-col lg:flex-row gap-10 items-center">
-            <div className="lg:w-1/3 space-y-4">
-              <h2 className="text-2xl font-bold">Mensaje de motivación</h2>
-              <p className="text-sm text-slate-100">
-                Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem.
-              </p>
-            </div>
-            <div className="lg:w-2/3">
-              <div className="w-full h-full bg-slate-800 rounded-lg">
-                <img className="w-full" src="https://placehold.co/600x400" alt="Extractos" />
+      {motivation && (motivation.title || motivation.body || motivation.image) && (
+        <section className="bg-slate-900 text-white p-6 lg:p-12 lg:py-24">
+          <Container>
+            <div className="flex flex-col lg:flex-row gap-10 items-center">
+              <div className="lg:w-1/3 space-y-4">
+                {motivation.title && (
+                  <h2 className="text-2xl font-bold">{motivation.title}</h2>
+                )}
+                {motivation.body && (
+                  <p className="text-sm text-slate-100 whitespace-pre-line">
+                    {motivation.body}
+                  </p>
+                )}
+              </div>
+              <div className="lg:w-2/3">
+                <div className="w-full h-full bg-slate-800 rounded-lg">
+                  <img
+                    className="w-full"
+                    src={motivationSet?.src ?? "https://placehold.co/600x400"}
+                    srcSet={motivationSet?.srcSet}
+                    sizes="(min-width: 1024px) 66vw, 100vw"
+                    alt={motivation.image?.alt ?? motivation.title ?? "Motivación"}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        </Container>
-      </section>
+          </Container>
+        </section>
+      )}
 
 
       <section className="bg-slate-100 p-6 lg:p-12 lg:py-24 ">
