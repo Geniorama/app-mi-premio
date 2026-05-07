@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { parseSessionCookie, SESSION_COOKIE } from "@/lib/session";
 import { getMembershipByEmail, createRedemptionInZoho } from "@/lib/zoho";
+import {
+  sendRedemptionAdminEmail,
+  sendRedemptionUserEmail,
+} from "@/lib/email";
 import { sanityClient } from "@/sanity/client";
 import { sanityWriteClient, assertWriteClient } from "@/sanity/writeClient";
 import { voucherBySlugQuery } from "@/sanity/queries";
@@ -114,6 +118,38 @@ export async function POST(request: Request) {
     console.error(
       "[/api/redemptions] Sanity write error (redención ya existe en Zoho):",
       err
+    );
+  }
+
+  // 5. Notificaciones por email (no bloqueantes)
+  const recipientEmail = deliveryEmail?.trim() || user.email;
+  const userEmailResult = await sendRedemptionUserEmail({
+    to: recipientEmail,
+    fullName: user.fullName,
+    voucherTitle: voucher.title,
+    points,
+  });
+  if (!userEmailResult.success) {
+    console.error(
+      "[/api/redemptions] Email al usuario falló:",
+      userEmailResult.error
+    );
+  }
+
+  const adminEmailResult = await sendRedemptionAdminEmail({
+    userFullName: user.fullName,
+    userEmail: user.email,
+    segment: membership.Categor_a ?? null,
+    voucherTitle: voucher.title,
+    points,
+    requestDate: zohoRecord.createdTime
+      ? new Date(zohoRecord.createdTime)
+      : new Date(),
+  });
+  if (!adminEmailResult.success) {
+    console.error(
+      "[/api/redemptions] Email al admin falló:",
+      adminEmailResult.error
     );
   }
 
