@@ -266,7 +266,7 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
                   <span className="text-lg text-black font-bold">
                     Acepto{" "}
                     <Link
-                      href="/politicas-de-privacidad"
+                      href="/politica-de-privacidad"
                       className="underline hover:text-custom-green"
                     >
                       políticas de privacidad

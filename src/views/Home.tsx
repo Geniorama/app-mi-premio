@@ -63,7 +63,7 @@ export default function HomeView({ data }: HomeViewProps) {
       />
 
       <section
-        className="w-full bg-[#F6F6F6] p-12 lg:py-24 flex-col text-center items-center justify-center bg-cover bg-center bg-no-repeat"
+        className="w-full bg-[#F6F6F6] p-12 lg:py-24 flex-col text-center items-center justify-center bg-content bg-center bg-no-repeat"
         style={{ backgroundImage: `url(${!isMobile && imgSnap.src})` }}
       >
         <Container>
@@ -72,7 +72,7 @@ export default function HomeView({ data }: HomeViewProps) {
           </h2>
           <div className="flex justify-between gap-x-120 lg:gap-x-20 gap-y-10 text-left flex-wrap mt-16">
             {featureItems.map((item) => (
-              <div className="md:w-1/3 w-full" key={item.key}>
+              <div className="sm:w-1/2 lg:w-1/3 w-full" key={item.key}>
                 <div className="flex items-center gap-2">
                   <img src={item.icon} alt={item.title} className="w-8 h-8" />
                   <h3 className="text-custom-green font-bold text-2xl">{item.title}</h3>
