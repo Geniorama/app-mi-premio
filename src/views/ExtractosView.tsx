@@ -324,9 +324,9 @@ export default function ExtractosView({ page }: ExtractosViewProps) {
                 )}
               </div>
               <div className="lg:w-2/3">
-                <div className="w-full h-full bg-slate-800 rounded-lg">
+                <div className="w-full rounded-lg">
                   <img
-                    className="w-full max-w-auto"
+                    className="w-full"
                     src={motivationSet?.src ?? "https://placehold.co/600x400"}
                     srcSet={motivationSet?.srcSet}
                     sizes="(min-width: 1024px) 66vw, 100vw"
