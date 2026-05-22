@@ -10,7 +10,10 @@
       "Bash(npx tsc *)",
       "Bash(echo \"exit=$?\")",
       "Bash(node *)",
-      "mcp__Sanity__query_documents"
+      "mcp__Sanity__query_documents",
+      "Bash(dir /A .env*)",
+      "Bash(kill %1)",
+      "Bash(powershell -NoProfile -Command \"Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force\")"
     ]
   }
 }

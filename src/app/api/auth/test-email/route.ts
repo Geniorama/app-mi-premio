@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       baseUrlUsed:
         baseUrl ||
         process.env.NEXT_PUBLIC_APP_URL ||
-        "https://mipremio.com.co",
+        "https://mipremiogermanmoraleshoteles.com",
     });
   } catch (error) {
     return NextResponse.json(

@@ -32,7 +32,7 @@ function resolveAppUrl(baseUrl?: string): string {
   return (
     baseUrl ||
     process.env.NEXT_PUBLIC_APP_URL ||
-    "https://mipremio.com.co"
+    "https://mipremiogermanmoraleshoteles.com"
   ).replace(/\/$/, "");
 }
 
@@ -212,6 +212,7 @@ interface RedemptionAdminEmailParams {
   points: number;
   requestDate?: Date;
   baseUrl?: string;
+  adminTo?: string;
 }
 
 export async function sendRedemptionAdminEmail({
@@ -222,6 +223,7 @@ export async function sendRedemptionAdminEmail({
   points,
   requestDate,
   baseUrl,
+  adminTo,
 }: RedemptionAdminEmailParams): Promise<SendEmailResult> {
   const subject = `ALERTA: Nueva redención de puntos - ${userFullName}`;
   const appUrl = resolveAppUrl(baseUrl);
@@ -262,7 +264,7 @@ export async function sendRedemptionAdminEmail({
   `;
 
   return sendZeptoEmail({
-    to: ADMIN_EMAIL,
+    to: adminTo?.trim() || ADMIN_EMAIL,
     toName: "Mi Premio - Admin",
     subject,
     htmlBody,
