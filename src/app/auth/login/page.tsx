@@ -1,7 +1,13 @@
-import LoginView from '@/views/LoginView'
+import LoginView from "@/views/LoginView";
+import { sanityFetch } from "@/sanity/fetch";
+import { loginPageQuery } from "@/sanity/queries";
+import type { LoginPage } from "@/sanity/types";
 
-export default function LoginPage() {
-  return (
-    <LoginView />
-  )
+export default async function LoginPage() {
+  const page = await sanityFetch<LoginPage | null>(
+    loginPageQuery,
+    {},
+    ["loginPage"],
+  );
+  return <LoginView page={page} />;
 }

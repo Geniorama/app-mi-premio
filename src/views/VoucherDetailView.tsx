@@ -245,6 +245,7 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
                   <span className="text-lg text-black font-bold">
                     Acepto{" "}
                     <Link
+                      target="_blank"
                       href="/terminos-y-condiciones"
                       className="underline hover:text-custom-green"
                     >
@@ -266,6 +267,7 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
                   <span className="text-lg text-black font-bold">
                     Acepto{" "}
                     <Link
+                      target="_blank"
                       href="/politica-de-privacidad"
                       className="underline hover:text-custom-green"
                     >

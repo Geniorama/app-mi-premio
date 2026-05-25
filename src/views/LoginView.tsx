@@ -10,8 +10,13 @@ import iconInstagram from "@/img/instagram-fill.svg";
 import iconLinkedin from "@/img/linkedin-fill.svg";
 import iconYoutube from "@/img/youtube-fill.svg";
 import Link from "next/link";
+import type { LoginPage } from "@/sanity/types";
 
-export default function LoginView() {
+interface LoginViewProps {
+  page: LoginPage | null;
+}
+
+export default function LoginView({ page }: LoginViewProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -122,12 +127,18 @@ export default function LoginView() {
     >
       <Container>
         <div className="text-center p-12 flex flex-col items-center justify-center h-screen">
-          <h1 className="text-4xl font-normal text-custom-green">Login</h1>
-          <p className="text-lg mt-4">Bienvenido a nuestra plataforma</p>
+          <h1 className="text-4xl font-normal text-custom-green">
+            {page?.title ?? "Login"}
+          </h1>
+          <p className="text-lg mt-4">
+            {page?.subtitle ?? "Bienvenido a nuestra plataforma"}
+          </p>
 
           <div className="shadow-lg p-12 border border-slate-700 mt-12 bg-white max-w-4xl w-full">
             <img src={Logo.src} alt="Logo" className="w-26 mx-auto" />
-            <h2 className="text-2xl font-bold my-3">{"Inicia sesi\u00f3n"}</h2>
+            <h2 className="text-2xl font-bold my-3">
+              {page?.formHeading ?? "Inicia sesi\u00f3n"}
+            </h2>
 
             {message && (
               <div
@@ -145,7 +156,7 @@ export default function LoginView() {
               <form onSubmit={handleSendCode} className="max-w-xl mx-auto">
                 <input
                   name="email"
-                  placeholder="Correo electrónico"
+                  placeholder={page?.emailPlaceholder ?? "Correo electrónico"}
                   className="w-full p-2 rounded-lg border border-gray-300"
                   type="email"
                   id="email"
@@ -160,7 +171,7 @@ export default function LoginView() {
                   className="w-fit! mx-auto mt-12 whitespace-nowrap"
                   disabled={loading}
                 >
-                  {loading ? "Enviando..." : "Enviar código"}
+                  {loading ? "Enviando..." : page?.sendCodeButtonLabel ?? "Enviar código"}
                 </Button>
               </form>
             ) : (
@@ -187,7 +198,7 @@ export default function LoginView() {
                   className="w-full! mt-4 whitespace-nowrap"
                   disabled={loading || code.length !== 6}
                 >
-                  {loading ? "Verificando..." : "Verificar e iniciar sesión"}
+                  {loading ? "Verificando..." : page?.verifyCodeButtonLabel ?? "Verificar e iniciar sesión"}
                 </Button>
                 <button
                   type="button"
