@@ -6,6 +6,12 @@ export interface SanityImage {
   alt?: string;
 }
 
+export interface Seo {
+  title?: string;
+  description?: string;
+  ogImage?: SanityImage;
+}
+
 export interface LinkItem {
   label: string;
   href: string;
@@ -45,6 +51,7 @@ export interface SiteSettings {
   footerColumn2?: LinkItem[];
   socialLinks?: SocialLink[];
   footerCopyright?: string;
+  defaultSeo?: Seo;
 }
 
 export interface VoucherCard {
@@ -78,11 +85,13 @@ export interface HomePage {
     buttonText?: string;
     buttonLink?: string;
   };
+  seo?: Seo;
 }
 
 export interface CatalogoPage {
   hero?: Hero;
   loadMoreLabel?: string;
+  seo?: Seo;
 }
 
 export interface PerfilPage {
@@ -95,6 +104,7 @@ export interface PerfilPage {
     image?: SanityImage;
   };
   carouselLoadMoreLabel?: string;
+  seo?: Seo;
 }
 
 export interface ExtractosPage {
@@ -105,6 +115,7 @@ export interface ExtractosPage {
     image?: SanityImage;
   };
   infoBlocks?: { title?: string; body?: string }[];
+  seo?: Seo;
 }
 
 export interface GraciasPage {
@@ -113,12 +124,14 @@ export interface GraciasPage {
   image?: SanityImage;
   buttonText?: string;
   buttonLink?: string;
+  seo?: Seo;
 }
 
 export interface RegistroPage {
   title?: string;
   description?: string;
   zohoFormUrl?: string;
+  seo?: Seo;
 }
 
 export interface LoginPage {
@@ -128,6 +141,7 @@ export interface LoginPage {
   emailPlaceholder?: string;
   sendCodeButtonLabel?: string;
   verifyCodeButtonLabel?: string;
+  seo?: Seo;
 }
 
 export interface LegalPage {
@@ -135,4 +149,5 @@ export interface LegalPage {
   slug: string;
   updatedAt?: string;
   body: PortableTextBlock[];
+  seo?: Seo;
 }

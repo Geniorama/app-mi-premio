@@ -10,6 +10,12 @@ const heroFields = /* groq */ `
   buttonLink
 `;
 
+const seoFields = /* groq */ `
+  title,
+  description,
+  ogImage
+`;
+
 export const siteSettingsQuery = groq`
   *[_id == "siteSettings"][0]{
     title,
@@ -19,7 +25,8 @@ export const siteSettingsQuery = groq`
     footerColumn1[]{label, href, target, requiresAuth},
     footerColumn2[]{label, href, target, requiresAuth},
     socialLinks[]{platform, href},
-    footerCopyright
+    footerCopyright,
+    defaultSeo{${seoFields}}
   }
 `;
 
@@ -30,14 +37,16 @@ export const homePageQuery = groq`
       title,
       items[]{icon, title, description, linkLabel, linkHref}
     },
-    contentBlock{title, body, image, buttonText, buttonLink}
+    contentBlock{title, body, image, buttonText, buttonLink},
+    seo{${seoFields}}
   }
 `;
 
 export const catalogoPageQuery = groq`
   *[_id == "catalogoPage"][0]{
     hero{${heroFields}},
-    loadMoreLabel
+    loadMoreLabel,
+    seo{${seoFields}}
   }
 `;
 
@@ -47,7 +56,8 @@ export const perfilPageQuery = groq`
     welcomeMessage,
     profileImage,
     suggestedBlock{title, body, image},
-    carouselLoadMoreLabel
+    carouselLoadMoreLabel,
+    seo{${seoFields}}
   }
 `;
 
@@ -55,19 +65,22 @@ export const extractosPageQuery = groq`
   *[_id == "extractosPage"][0]{
     hero{${heroFields}},
     motivationBlock{title, body, image},
-    infoBlocks[]{title, body}
+    infoBlocks[]{title, body},
+    seo{${seoFields}}
   }
 `;
 
 export const graciasPageQuery = groq`
   *[_id == "graciasPage"][0]{
-    title, body, image, buttonText, buttonLink
+    title, body, image, buttonText, buttonLink,
+    seo{${seoFields}}
   }
 `;
 
 export const registroPageQuery = groq`
   *[_id == "registroPage"][0]{
-    title, description, zohoFormUrl
+    title, description, zohoFormUrl,
+    seo{${seoFields}}
   }
 `;
 
@@ -78,7 +91,8 @@ export const loginPageQuery = groq`
     formHeading,
     emailPlaceholder,
     sendCodeButtonLabel,
-    verifyCodeButtonLabel
+    verifyCodeButtonLabel,
+    seo{${seoFields}}
   }
 `;
 
@@ -127,7 +141,8 @@ export const legalPageBySlugQuery = groq`
     title,
     "slug": slug.current,
     updatedAt,
-    body
+    body,
+    seo{${seoFields}}
   }
 `;
 

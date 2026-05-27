@@ -1,8 +1,10 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Container from "@/utils/Container";
 import { PortableText } from "@portabletext/react";
 import { sanityFetch } from "@/sanity/fetch";
 import { legalPageBySlugQuery, legalPageSlugsQuery } from "@/sanity/queries";
+import { buildMetadata, getSeoDefaults } from "@/sanity/seo";
 import type { LegalPage } from "@/sanity/types";
 
 interface Params {
@@ -12,6 +14,34 @@ interface Params {
 export async function generateStaticParams() {
   const slugs = await sanityFetch<string[]>(legalPageSlugsQuery, {}, ["legalPage"]);
   return slugs.map((slug) => ({ slug }));
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<Params>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const [page, { defaultSeo }] = await Promise.all([
+    sanityFetch<LegalPage | null>(legalPageBySlugQuery, { slug }, ["legalPage"]),
+    getSeoDefaults(),
+  ]);
+
+  if (!page) {
+    return buildMetadata({
+      defaults: defaultSeo,
+      title: "Página no encontrada",
+      path: `/${slug}`,
+      noindex: true,
+    });
+  }
+
+  return buildMetadata({
+    seo: page.seo,
+    defaults: defaultSeo,
+    title: page.title,
+    path: `/${page.slug}`,
+  });
 }
 
 export default async function LegalPageRoute({

@@ -13,7 +13,22 @@
       "mcp__Sanity__query_documents",
       "Bash(dir /A .env*)",
       "Bash(kill %1)",
-      "Bash(powershell -NoProfile -Command \"Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force\")"
+      "Bash(powershell -NoProfile -Command \"Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force\")",
+      "Bash(magick -version)",
+      "Bash(ls -la sanity.config.* sanity.cli.*)",
+      "Bash(ls -la .env*)",
+      "mcp__Sanity__list_workspace_schemas",
+      "mcp__Sanity__get_schema",
+      "Bash(ls vercel.json next.config.*)",
+      "Bash(git remote *)",
+      "Bash(echo \"=== EXIT: $? ===\")",
+      "Bash(npx eslint *)",
+      "Bash(grep -oiE '<title>[^<]*</title>|<link rel=\"canonical\"[^>]*>|<meta property=\"og:title\"[^>]*>' .next/server/app/catalogo.html)",
+      "Bash(grep -oiE '<title>[^<]*</title>|<meta name=\"robots\"[^>]*>|<link rel=\"canonical\"[^>]*>' .next/server/app/gracias.html)",
+      "Bash(grep -oiE '<title>[^<]*</title>|<link rel=\"canonical\"[^>]*>' .next/server/app/terminos-y-condiciones.html)",
+      "Bash(grep -oiE '<link rel=\"apple-touch-icon\"[^>]*>' .next/server/app/index.html)",
+      "mcp__Sanity__patch_document_from_json",
+      "mcp__Sanity__publish_documents"
     ]
   }
 }
