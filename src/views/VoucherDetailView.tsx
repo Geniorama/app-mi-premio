@@ -10,6 +10,7 @@ import {
   FiAward,
   FiClock,
   FiCheck,
+  FiArrowLeft,
 } from "react-icons/fi";
 import Link from "next/link";
 import { PortableText } from "@portabletext/react";
@@ -181,6 +182,15 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
 
       <section className="w-full bg-white py-10 lg:py-14">
         <Container>
+          <button
+            type="button"
+            onClick={() => router.push("/catalogo")}
+            className="inline-flex items-center gap-2 mb-6 text-custom-green font-bold hover:text-[#417D30] transition-colors cursor-pointer"
+          >
+            <FiArrowLeft size={20} />
+            Volver al catálogo
+          </button>
+
           <div className="relative w-full overflow-hidden mb-10">
             <img
               src={voucherImage}
