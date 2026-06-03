@@ -37,6 +37,17 @@ export async function GET() {
 
     return NextResponse.json({
       fullName,
+      contact: contact
+        ? {
+            email: contact.Email ?? user.email,
+            telefono: contact.Mobile || contact.Phone || null,
+            cargo: contact.Cargo ?? null,
+            empresa: contact.Account_Name?.name ?? null,
+            ubicacion: contact.Ciudad_Principal?.name ?? null,
+            fechaNacimiento: contact.Date_of_Birth ?? null,
+            estadoFidelizacion: contact.Estado_Fidelizaci_n ?? null,
+          }
+        : null,
       membership: {
         id: membership.id,
         puntos: membership.Saldo_Puntos_Disponibles ?? null,

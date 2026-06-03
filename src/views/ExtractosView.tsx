@@ -3,7 +3,7 @@ import Hero from "@/components/Hero";
 import Container from "@/utils/Container";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FiTrendingUp, FiGift, FiStar, FiMinusCircle, FiX, FiFileText, FiDownload, FiCalendar } from "react-icons/fi";
+import { FiTrendingUp, FiGift, FiStar, FiMinusCircle, FiX, FiFileText, FiDownload, FiCalendar, FiClock } from "react-icons/fi";
 import { MdHotel } from "react-icons/md";
 import { urlFor, buildImageSet } from "@/sanity/image";
 import type { ExtractosPage } from "@/sanity/types";
@@ -280,6 +280,43 @@ export default function ExtractosView({ page }: ExtractosViewProps) {
     0
   );
 
+  // Próximos puntos a vencer: registros vigentes (Aprobado / Parcial Aprobado)
+  // con saldo disponible y fecha de vencimiento futura, ordenados del más cercano al más lejano.
+  const VENTANA_VENCIMIENTO_DIAS = 90;
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const diasHasta = (dateStr: string | null): number | null => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return null;
+    d.setHours(0, 0, 0, 0);
+    return Math.round((d.getTime() - hoy.getTime()) / 86_400_000);
+  };
+
+  const proximosAVencer = puntosAcumulados
+    .filter((p) => p.estado === "Aprobado" || p.estado === "Parcial Aprobado")
+    .map((p) => ({
+      ...p,
+      puntosVigentes: (p.puntosEntregados ?? 0) - (p.puntosRedimidos ?? 0),
+      diasRestantes: diasHasta(p.fechaVencimiento),
+    }))
+    .filter(
+      (p): p is typeof p & { diasRestantes: number } =>
+        p.puntosVigentes > 0 && p.diasRestantes != null && p.diasRestantes >= 0
+    )
+    .sort((a, b) => a.diasRestantes - b.diasRestantes);
+
+  // Solo mostramos el registro con vencimiento más cercano.
+  const proximoAVencer = proximosAVencer[0] ?? null;
+
+  const vencimientoBadge = (dias: number) => {
+    if (dias <= 30) return "bg-red-100 text-red-700";
+    if (dias <= VENTANA_VENCIMIENTO_DIAS) return "bg-amber-100 text-amber-700";
+    return "bg-slate-100 text-slate-600";
+  };
+  const diasLabel = (dias: number) =>
+    dias === 0 ? "Vence hoy" : dias === 1 ? "Vence mañana" : `En ${dias} días`;
+
   const heroSet = page?.hero?.image
     ? buildImageSet(page.hero.image, [320, 480, 640, 800])
     : null;
@@ -433,6 +470,47 @@ export default function ExtractosView({ page }: ExtractosViewProps) {
               </ul>
             )}
           </div>
+
+          {/* Próximos puntos a vencer: solo el más cercano */}
+          {!loading && proximoAVencer && (
+            <div className="mb-6 lg:mb-16 rounded-lg border border-amber-200 bg-amber-50 p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="shrink-0 w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
+                  <FiClock size={20} />
+                </span>
+                <h3 className="text-lg font-bold text-amber-700">
+                  Próximos puntos a vencer
+                </h3>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium text-gray-800">
+                    Vence el {formatDate(proximoAVencer.fechaVencimiento)}
+                  </p>
+                  {extractHotelName(proximoAVencer.entregaOC) && (
+                    <p
+                      className="text-xs text-gray-500 truncate"
+                      title={extractHotelName(proximoAVencer.entregaOC) ?? ""}
+                    >
+                      {extractHotelName(proximoAVencer.entregaOC)}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${vencimientoBadge(
+                      proximoAVencer.diasRestantes
+                    )}`}
+                  >
+                    {diasLabel(proximoAVencer.diasRestantes)}
+                  </span>
+                  <span className="font-bold text-amber-700 whitespace-nowrap">
+                    {proximoAVencer.puntosVigentes.toLocaleString("es-CO")} pts
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Botón para abrir el detalle */}
           <div className="flex justify-center">

@@ -62,6 +62,15 @@ export interface ZohoContact {
   Full_Name?: string;
   Estado_Fidelizaci_n?: string;
   Estado?: string;
+  Phone?: string;
+  Mobile?: string;
+  /** Cargo (campo personalizado; el estándar Title viene vacío) */
+  Cargo?: string;
+  /** Lookup al módulo Accounts: Zoho lo devuelve como objeto */
+  Account_Name?: { name: string; id: string } | null;
+  /** Lookup de ciudad; el name ya incluye "Ciudad / Departamento / País" */
+  Ciudad_Principal?: { name: string; id: string } | null;
+  Date_of_Birth?: string;
 }
 
 /** Valida que el contacto pueda acceder (Estado y Estado_Fidelizaci_n = Activo) */
@@ -302,6 +311,12 @@ export async function searchContactByEmail(
     "Email",
     "Estado",
     "Estado_Fidelizaci_n",
+    "Phone",
+    "Mobile",
+    "Cargo",
+    "Account_Name",
+    "Ciudad_Principal",
+    "Date_of_Birth",
   ].join(",");
   const url =
     `${ZOHO_CRM_DOMAIN}/crm/v6/Contacts/search` +
