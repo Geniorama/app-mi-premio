@@ -61,6 +61,7 @@ export interface VoucherCard {
   image?: SanityImage;
   pointsValue?: number;
   priceCOP?: number;
+  category?: string;
 }
 
 export interface Voucher extends VoucherCard {

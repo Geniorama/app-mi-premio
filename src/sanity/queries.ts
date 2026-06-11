@@ -103,7 +103,8 @@ export const vouchersListQuery = groq`
     "slug": slug.current,
     image,
     pointsValue,
-    priceCOP
+    priceCOP,
+    category
   }
 `;
 

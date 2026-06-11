@@ -20,19 +20,61 @@ interface HeaderProps {
   nav?: LinkItem[];
 }
 
+// Insignia de puntos del usuario. `dark` se usa sobre fondo verde (barra móvil).
+function PointsBadge({ label, dark }: { label: string; dark?: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold whitespace-nowrap ${
+        dark ? "bg-white/20 text-white" : "bg-custom-green/10 text-custom-green"
+      }`}
+    >
+      <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" aria-hidden="true">
+        <path d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
+      </svg>
+      {label}
+    </span>
+  );
+}
+
 export default function Header({ logoUrl, nav }: HeaderProps) {
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [points, setPoints] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
+    let active = true;
     fetch("/api/auth/me")
       .then((res) => (res.ok ? res.json() : { user: null }))
-      .then((data) => setUser(data.user))
-      .catch(() => setUser(null))
-      .finally(() => setIsLoading(false));
+      .then((data) => {
+        if (!active) return;
+        setUser(data.user);
+        // Si hay sesión, traemos el saldo de puntos de la membresía.
+        if (data.user) {
+          fetch("/api/user/membership")
+            .then((r) => (r.ok ? r.json() : null))
+            .then((m) => {
+              if (active && m?.membership?.puntos != null) {
+                setPoints(m.membership.puntos);
+              }
+            })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {
+        if (active) setUser(null);
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
+
+  const pointsLabel =
+    points != null ? `${points.toLocaleString("es-CO")} pts` : null;
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -56,9 +98,12 @@ export default function Header({ logoUrl, nav }: HeaderProps) {
               >
                 {user.fullName}
               </Link>
-              <Button variant="tertiary" onClick={handleLogout} className="h-8! uppercase shrink-0">
-                Salir
-              </Button>
+              <div className="flex items-center gap-2 shrink-0">
+                {pointsLabel && <PointsBadge label={pointsLabel} dark />}
+                <Button variant="tertiary" onClick={handleLogout} className="h-8! uppercase shrink-0">
+                  Salir
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="flex items-center justify-end gap-4 px-2">
@@ -155,8 +200,9 @@ export default function Header({ logoUrl, nav }: HeaderProps) {
               </Button>
               <Link
                 href="/perfil"
-                className="flex items-center gap-2 text-black font-bold whitespace-nowrap hover:text-custom-green transition-colors"
+                className="flex items-center gap-3 text-black font-bold whitespace-nowrap hover:text-custom-green transition-colors"
               >
+                {pointsLabel && <PointsBadge label={pointsLabel} />}
                 {user.fullName}
                 <img className="w-6 h-6" src={iconUser.src} alt="icon-user" />
               </Link>

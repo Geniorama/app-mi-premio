@@ -28,7 +28,9 @@
       "Bash(grep -oiE '<title>[^<]*</title>|<link rel=\"canonical\"[^>]*>' .next/server/app/terminos-y-condiciones.html)",
       "Bash(grep -oiE '<link rel=\"apple-touch-icon\"[^>]*>' .next/server/app/index.html)",
       "mcp__Sanity__patch_document_from_json",
-      "mcp__Sanity__publish_documents"
+      "mcp__Sanity__publish_documents",
+      "PowerShell(Set-Content *)",
+      "PowerShell(npx tsc --noEmit -p \"C:\\\\Users\\\\Janus\\\\Documents\\\\Proyectos web\\\\web-mi-premio\\\\tsconfig.json\")"
     ]
   }
 }
