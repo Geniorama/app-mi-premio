@@ -1,6 +1,7 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import FloatingWhatsApp from "@/components/FloatingWhatsApp";
+import WelcomeVideoModal from "@/components/WelcomeVideoModal";
 import { sanityFetch } from "@/sanity/fetch";
 import { siteSettingsQuery } from "@/sanity/queries";
 import { urlFor } from "@/sanity/image";
@@ -28,6 +29,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
         copyright={settings?.footerCopyright}
       />
       <FloatingWhatsApp />
+      <WelcomeVideoModal />
     </div>
   );
 }
