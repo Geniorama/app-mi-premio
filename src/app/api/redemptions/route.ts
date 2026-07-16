@@ -87,41 +87,97 @@ export async function POST(request: Request) {
     );
   }
 
-  // 3. Crear redención en Zoho (fuente de verdad del descuento)
-  let zohoRecord: { id: string; createdTime?: string };
-  try {
-    zohoRecord = await createRedemptionInZoho(membership.id, points);
-  } catch (err) {
-    console.error("[/api/redemptions] Zoho POST error:", err);
+  // 3. Repartir los puntos FIFO entre los registros de la red
+  //    (los puntos más antiguos se consumen primero; si un registro no
+  //    alcanza, se divide en varias redenciones)
+  const red =
+    membership.redFifo && membership.redFifo.length > 0
+      ? membership.redFifo
+      : [
+          {
+            id: membership.id,
+            nombre: membership.id,
+            saldo: balance,
+            puntosMasAntiguos: null,
+          },
+        ];
+
+  const tramos: { membershipId: string; points: number }[] = [];
+  let restante = points;
+  for (const registro of red) {
+    if (restante <= 0) break;
+    const take = Math.min(registro.saldo, restante);
+    if (take <= 0) continue;
+    tramos.push({ membershipId: registro.id, points: take });
+    restante -= take;
+  }
+  if (restante > 0) {
+    // No debería ocurrir: el saldo global ya se validó arriba
     return NextResponse.json(
-      { error: "No se pudo crear la redención en Zoho" },
-      { status: 502 }
+      { error: "Saldo insuficiente", balance, required: points },
+      { status: 400 }
     );
   }
 
-  // 4. Registrar evento en Sanity (auditoría / entrega)
+  // 4. Crear redenciones en Zoho (fuente de verdad del descuento)
+  const zohoRecords: {
+    id: string;
+    createdTime?: string;
+    membershipId: string;
+    points: number;
+  }[] = [];
+  for (const tramo of tramos) {
+    try {
+      const record = await createRedemptionInZoho(
+        tramo.membershipId,
+        tramo.points
+      );
+      zohoRecords.push({ ...record, ...tramo });
+    } catch (err) {
+      console.error(
+        `[/api/redemptions] Zoho POST error (tramo ${tramo.membershipId}, ` +
+          `${zohoRecords.length}/${tramos.length} tramos ya creados):`,
+        err
+      );
+      return NextResponse.json(
+        {
+          error: "No se pudo crear la redención en Zoho",
+          // Redenciones ya creadas antes del fallo (para revisión manual)
+          createdRedemptionIds: zohoRecords.map((r) => r.id),
+        },
+        { status: 502 }
+      );
+    }
+  }
+  const zohoRecord = zohoRecords[0];
+
+  // 5. Registrar eventos en Sanity (auditoría / entrega), uno por tramo
   try {
-    await sanityWriteClient.create({
-      _type: "redemption",
-      zohoRedemptionId: zohoRecord.id,
-      zohoMembershipId: membership.id,
-      email: user.email,
-      pointsRedeemed: points,
-      voucher: { _type: "reference", _ref: voucher._id },
-      status: "pendiente",
-      redeemedAt: zohoRecord.createdTime ?? new Date().toISOString(),
-      termsAcceptedAt: termsAcceptedAt ?? new Date().toISOString(),
-      ...(deliveryEmail ? { deliveryEmail } : {}),
-    });
+    await Promise.all(
+      zohoRecords.map((record) =>
+        sanityWriteClient.create({
+          _type: "redemption",
+          zohoRedemptionId: record.id,
+          zohoMembershipId: record.membershipId,
+          email: user.email,
+          pointsRedeemed: record.points,
+          voucher: { _type: "reference", _ref: voucher._id },
+          status: "pendiente",
+          redeemedAt: record.createdTime ?? new Date().toISOString(),
+          termsAcceptedAt: termsAcceptedAt ?? new Date().toISOString(),
+          ...(deliveryEmail ? { deliveryEmail } : {}),
+        })
+      )
+    );
   } catch (err) {
-    // No bloqueante: Zoho ya tiene la redención (source of truth del saldo)
+    // No bloqueante: Zoho ya tiene las redenciones (source of truth del saldo)
     console.error(
-      "[/api/redemptions] Sanity write error (redención ya existe en Zoho):",
+      "[/api/redemptions] Sanity write error (redenciones ya existen en Zoho):",
       err
     );
   }
 
-  // 5. Notificaciones por email (no bloqueantes)
+  // 6. Notificaciones por email (no bloqueantes)
   const recipientEmail = deliveryEmail?.trim() || user.email;
   const userEmailResult = await sendRedemptionUserEmail({
     to: recipientEmail,
@@ -155,6 +211,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     zohoRedemptionId: zohoRecord.id,
+    zohoRedemptionIds: zohoRecords.map((r) => r.id),
     pointsRedeemed: points,
     newBalance: balance - points,
   });

@@ -146,13 +146,44 @@ export interface ZohoPuntoMembresia {
 
 export interface ZohoMembership {
   id: string;
+  Name?: string;
   /** Campo "Correo electrónico 1" del registro de membresía */
   Correo_electr_nico_1?: string;
   Saldo_Puntos_Disponibles?: number;
+  /** Saldo consolidado de toda la red (solo poblado en membresías Padre) */
+  Puntos_Globales_Red?: number | null;
+  /** "Padre" (cuenta global del afiliado) o "Hija" (un ciclo) */
+  Relacion_Membresia?: string;
+  /** Lookup a la membresía Padre (solo en Hijas) */
+  Membresia_Padre?: { name: string; id: string } | null;
+  /** ID de la hija activa más reciente (solo en el Padre) */
+  ID_Ultima_Hija_Activa?: string | null;
+  /** Hijas relacionadas (solo en el Padre) */
+  Membresias_Hijas_Relacionadas?: Array<{
+    id: string;
+    Membresia_Hija_Lookup?: { name: string; id: string } | null;
+    Saldo_Puntos_Disponibles_Hija?: number | null;
+  }> | null;
   /** Ajustar al nombre API real del campo de categoría */
   Categor_a?: string;
+  Created_Time?: string;
   /** Subformulario Puntos Membresía */
   Puntos_Membresia?: ZohoPuntoMembresia[];
+  /**
+   * Registros de la red (Padre + Hijas) con saldo, ordenados FIFO por la
+   * fecha de entrega más antigua de sus puntos. Calculado por
+   * getMembershipByEmail; no es un campo de Zoho.
+   */
+  redFifo?: ZohoMembershipRedRecord[];
+}
+
+/** Registro individual de la red de membresías, para asignación FIFO */
+export interface ZohoMembershipRedRecord {
+  id: string;
+  nombre: string;
+  saldo: number;
+  /** Fecha de entrega más antigua del subform de puntos del registro */
+  puntosMasAntiguos: string | null;
 }
 
 interface ZohoListResponse<T> {
@@ -160,16 +191,42 @@ interface ZohoListResponse<T> {
   info: { count: number; more_records: boolean };
 }
 
+/** Trae un registro completo del módulo Membresias por ID (incluye subforms) */
+async function getMembershipRecordById(
+  token: string,
+  id: string
+): Promise<ZohoMembership | null> {
+  const response = await fetch(`${ZOHO_CRM_DOMAIN}/crm/v6/Membresias/${id}`, {
+    headers: { Authorization: `Zoho-oauthtoken ${token}` },
+  });
+
+  if (!response.ok) {
+    console.warn(`[Zoho] No se pudo traer membresía ${id}: ${response.status}`);
+    return null;
+  }
+
+  const result = (await response.json()) as ZohoListResponse<ZohoMembership>;
+  return result.data?.[0] ?? null;
+}
+
 /**
- * Busca la membresía de un contacto por email y luego trae el registro
- * completo por ID para incluir el subformulario Puntos_Membresia.
+ * Busca la membresía de un contacto por email.
+ *
+ * En Zoho las membresías con email son registros "Hija" (una por ciclo);
+ * el saldo consolidado del afiliado vive en la membresía "Padre"
+ * (campo Puntos_Globales_Red = padre + todas las hijas).
+ *
+ * Devuelve una membresía con:
+ * - Saldo_Puntos_Disponibles = saldo global de la red (del Padre)
+ * - Puntos_Membresia = historial agregado (Padre + todas las Hijas)
+ * - id = última hija activa (para asociar redenciones)
  */
 export async function getMembershipByEmail(
   email: string
 ): Promise<ZohoMembership | null> {
   const token = await getZohoAccessToken();
 
-  // Paso 1: buscar por email para obtener el ID
+  // Paso 1: buscar por email para obtener una membresía hija
   const criteria = `(Correo_electr_nico_1:equals:${email})`;
   const searchUrl =
     `${ZOHO_CRM_DOMAIN}/crm/v6/Membresias/search` +
@@ -196,19 +253,76 @@ export async function getMembershipByEmail(
 
   console.log(`[Zoho] Membresía encontrada para: ${email} (ID: ${partial.id})`);
 
-  // Paso 2: traer el registro completo por ID para obtener subformularios
-  const recordUrl = `${ZOHO_CRM_DOMAIN}/crm/v6/Membresias/${partial.id}`;
-  const recordRes = await fetch(recordUrl, {
-    headers: { Authorization: `Zoho-oauthtoken ${token}` },
-  });
+  // Paso 2: traer el registro completo por ID (incluye subform y lookup al Padre)
+  const child = (await getMembershipRecordById(token, partial.id)) ?? partial;
 
-  if (!recordRes.ok) {
-    console.warn(`[Zoho] No se pudo traer registro completo, usando resultado parcial`);
-    return partial;
+  const parentId = child.Membresia_Padre?.id;
+  if (!parentId) {
+    // Registro sin Padre (membresía única): comportamiento original
+    return child;
   }
 
-  const recordResult = (await recordRes.json()) as ZohoListResponse<ZohoMembership>;
-  return recordResult.data?.[0] ?? partial;
+  // Paso 3: traer el Padre — tiene el saldo global y la lista de hijas
+  const parent = await getMembershipRecordById(token, parentId);
+  if (!parent) {
+    console.warn(`[Zoho] No se pudo traer membresía Padre ${parentId}, usando hija`);
+    return child;
+  }
+
+  // Paso 4: traer las demás hijas para consolidar el historial de puntos
+  const siblingIds = (parent.Membresias_Hijas_Relacionadas ?? [])
+    .map((h) => h.Membresia_Hija_Lookup?.id)
+    .filter((id): id is string => Boolean(id) && id !== child.id);
+
+  const siblings = (
+    await Promise.all(siblingIds.map((id) => getMembershipRecordById(token, id)))
+  ).filter((m): m is ZohoMembership => m !== null);
+
+  const registrosRed = [parent, child, ...siblings];
+
+  const puntosConsolidados = registrosRed
+    .flatMap((m) => m.Puntos_Membresia ?? [])
+    .sort((a, b) =>
+      (b.Fecha_de_Entrega ?? "").localeCompare(a.Fecha_de_Entrega ?? "")
+    );
+
+  // Red ordenada FIFO: primero el registro cuyos puntos son más antiguos.
+  // Las redenciones deben consumir los puntos más antiguos primero.
+  const redFifo: ZohoMembershipRedRecord[] = registrosRed
+    .map((m) => {
+      const fechas = (m.Puntos_Membresia ?? [])
+        .map((p) => p.Fecha_de_Entrega)
+        .filter((f): f is string => Boolean(f))
+        .sort();
+      return {
+        id: m.id,
+        nombre: m.Name ?? m.id,
+        saldo: m.Saldo_Puntos_Disponibles ?? 0,
+        puntosMasAntiguos: fechas[0] ?? m.Created_Time ?? null,
+      };
+    })
+    .filter((r) => r.saldo > 0)
+    .sort((a, b) =>
+      (a.puntosMasAntiguos ?? "").localeCompare(b.puntosMasAntiguos ?? "")
+    );
+
+  const saldoGlobal =
+    parent.Puntos_Globales_Red ?? parent.Saldo_Puntos_Disponibles;
+
+  console.log(
+    `[Zoho] Saldo global de red para ${email}: ${saldoGlobal} (Padre ${parent.id})`
+  );
+
+  return {
+    // Registro con los puntos más antiguos (destino FIFO por defecto)
+    id: redFifo[0]?.id ?? parent.ID_Ultima_Hija_Activa ?? child.id,
+    Correo_electr_nico_1: child.Correo_electr_nico_1,
+    Saldo_Puntos_Disponibles: saldoGlobal,
+    Categor_a: parent.Categor_a ?? child.Categor_a,
+    Membresia_Padre: { name: parent.Name ?? "", id: parent.id },
+    Puntos_Membresia: puntosConsolidados,
+    redFifo,
+  };
 }
 
 /**
