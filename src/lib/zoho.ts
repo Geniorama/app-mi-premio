@@ -191,6 +191,35 @@ interface ZohoListResponse<T> {
   info: { count: number; more_records: boolean };
 }
 
+/**
+ * Busca una membresía por un criterio GROQ-like de Zoho y devuelve el primer
+ * resultado parcial (o null si Zoho responde 204/sin datos).
+ */
+async function searchMembershipByCriteria(
+  token: string,
+  criteria: string
+): Promise<ZohoMembership | null> {
+  const searchUrl =
+    `${ZOHO_CRM_DOMAIN}/crm/v6/Membresias/search` +
+    `?criteria=${encodeURIComponent(criteria)}`;
+
+  const searchRes = await fetch(searchUrl, {
+    headers: { Authorization: `Zoho-oauthtoken ${token}` },
+  });
+
+  if (searchRes.status === 204) return null;
+
+  if (!searchRes.ok) {
+    const error = await searchRes.text();
+    console.error("[Zoho] Error buscando membresía:", searchRes.status, error);
+    throw new Error(`Zoho CRM membership error: ${searchRes.status} - ${error}`);
+  }
+
+  const searchResult =
+    (await searchRes.json()) as ZohoListResponse<ZohoMembership>;
+  return searchResult.data?.[0] ?? null;
+}
+
 /** Trae un registro completo del módulo Membresias por ID (incluye subforms) */
 async function getMembershipRecordById(
   token: string,
@@ -226,30 +255,27 @@ export async function getMembershipByEmail(
 ): Promise<ZohoMembership | null> {
   const token = await getZohoAccessToken();
 
-  // Paso 1: buscar por email para obtener una membresía hija
-  const criteria = `(Correo_electr_nico_1:equals:${email})`;
-  const searchUrl =
-    `${ZOHO_CRM_DOMAIN}/crm/v6/Membresias/search` +
-    `?criteria=${encodeURIComponent(criteria)}`;
-
-  const searchRes = await fetch(searchUrl, {
-    headers: { Authorization: `Zoho-oauthtoken ${token}` },
-  });
-
-  if (searchRes.status === 204) {
+  // Paso 1: buscar por email para obtener una membresía hija.
+  // El email suele vivir en "Correo electrónico 1" (Correo_electr_nico_1),
+  // pero algunos afiliados solo lo tienen en el "Nombre de Membresía" (Name)
+  // —típicamente registros Padre—, así que se hace fallback a buscar por Name.
+  let partial = await searchMembershipByCriteria(
+    token,
+    `(Correo_electr_nico_1:equals:${email})`
+  );
+  if (!partial) {
+    partial = await searchMembershipByCriteria(
+      token,
+      `(Name:equals:${email})`
+    );
+    if (partial) {
+      console.log(`[Zoho] Membresía encontrada por Name para: ${email}`);
+    }
+  }
+  if (!partial) {
     console.log(`[Zoho] Membresía NO encontrada para: ${email}`);
     return null;
   }
-
-  if (!searchRes.ok) {
-    const error = await searchRes.text();
-    console.error("[Zoho] Error buscando membresía:", searchRes.status, error);
-    throw new Error(`Zoho CRM membership error: ${searchRes.status} - ${error}`);
-  }
-
-  const searchResult = (await searchRes.json()) as ZohoListResponse<ZohoMembership>;
-  const partial = searchResult.data?.[0] ?? null;
-  if (!partial) return null;
 
   console.log(`[Zoho] Membresía encontrada para: ${email} (ID: ${partial.id})`);
 
