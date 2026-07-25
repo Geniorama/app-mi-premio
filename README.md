@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mi Premio
 
-## Getting Started
+Plataforma web del programa de lealtad **Mi Premio** (Germán Morales Hoteles).
 
-First, run the development server:
+Los afiliados inician sesión con un código enviado por correo, consultan su saldo de puntos y su
+historial (datos vivos en **Zoho CRM**), exploran el catálogo de bonos (contenido en **Sanity
+CMS**) y solicitan redenciones que se registran en Zoho y se auditan en Sanity.
+
+**Producción:** https://mipremiogermanmoraleshoteles.com
+
+## Stack
+
+Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 · Sanity CMS ·
+Zoho CRM v6 · ZeptoMail
+
+## Puesta en marcha
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+# copiar .env.local con las credenciales (pedir al equipo)
+npm run dev   # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Sin `ZOHO_ZEPTOMAIL_SEND_TOKEN` los correos no se envían: el código de login se imprime en la
+consola del servidor, así que se puede iniciar sesión con un correo real del CRM sin enviar nada.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Comando | Descripción |
+|---|---|
+| `npm run dev` | Servidor de desarrollo |
+| `npm run build` | Build de producción |
+| `npm run start` | Servidor de producción |
+| `npm run lint` | ESLint |
 
-## Learn More
+### Variables de entorno
 
-To learn more about Next.js, take a look at the following resources:
+`.env.local` (ignorado por git). Mínimo para arrancar:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+NEXT_PUBLIC_SANITY_PROJECT_ID=
+NEXT_PUBLIC_SANITY_DATASET=
+SANITY_API_WRITE_TOKEN=
+ZOHO_CLIENT_ID=
+ZOHO_CLIENT_SECRET=
+ZOHO_REFRESH_TOKEN=
+CRON_SECRET=
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+El listado completo, con defaults y comportamiento cuando faltan, está en
+[DOCUMENTACION-TECNICA.md § 8](./DOCUMENTACION-TECNICA.md#8-variables-de-entorno).
 
-## Deploy on Vercel
+## Estructura
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+src/
+├── app/          # App Router: páginas (server) y API routes
+├── components/   # piezas reutilizables
+├── views/        # composición por pantalla (client components)
+├── lib/          # integraciones de servidor: zoho, email, session, auth-codes
+├── sanity/       # cliente, queries GROQ, tipos, SEO, imágenes
+└── middleware.ts # protección de /perfil, /extractos, /gracias
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Documentación
+
+**[DOCUMENTACION-TECNICA.md](./DOCUMENTACION-TECNICA.md)** — arquitectura, rutas, flujo de
+autenticación, API interna, integración con Zoho (estructura Padre/Hija y regla FIFO de puntos),
+esquema de Sanity, variables de entorno, despliegue, operación del cron de sincronización y
+deuda técnica conocida.
+
+Notas importantes antes de tocar el código:
+
+- El **esquema de Sanity no está en este repositorio** (Studio remoto). `src/sanity/queries.ts` y
+  `src/sanity/types.ts` son un espejo manual: hay que actualizarlos a mano cuando cambie el Studio.
+- **Zoho es la fuente de verdad** del saldo y las redenciones; Sanity guarda contenido y auditoría.
+- Las redenciones consumen los puntos **más antiguos primero (FIFO)** y pueden dividirse en varios
+  registros de Zoho.
+- Al agregar una ruta protegida hay que actualizar **dos** listas en `src/middleware.ts`:
+  `PROTECTED_PATHS` y `matcher`.
