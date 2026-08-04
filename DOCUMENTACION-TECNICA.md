@@ -108,7 +108,9 @@ src/
 | `/auth/login` | SSR, `noindex` | `loginPage` | Redirige a `/perfil` si hay sesión |
 | `/auth/logout` | Client | Llama a `/api/auth/logout` y redirige a `/` | No |
 | `/admin` | Redirect | Redirige a `/admin/informes` | **Sí** (admin) |
-| `/admin/informes` | SSR dinámico, `noindex` | Panel de informes | **Sí** (admin) |
+| `/admin/informes` | Redirect | Redirige a la primera sección (`/resumen`) | **Sí** (admin) |
+| `/admin/informes/[seccion]` | SSR dinámico, `noindex` | Una sección del módulo por slug | **Sí** (admin) |
+| `/admin/usuarios` | SSR dinámico, `noindex` | Gestión de administradores | **Sí** (`owner`/`admin`) |
 | `/admin/login` | SSR, `noindex` | Acceso al panel | Redirige a `/admin/informes` si hay sesión |
 
 `middleware.ts` protege `/perfil`, `/extractos` y `/gracias` (con sus subrutas) y redirige a
@@ -308,6 +310,11 @@ un borrador en el Studio no otorga acceso.
 varios documentos con el mismo correo, además de dejar un `console.warn`. Ante una configuración
 ambigua conviene conceder de menos.
 
+`requireActiveAdmin()` devuelve los datos **frescos de Sanity**, no la instantánea que guardó el
+token al iniciar sesión: de la cookie solo se toma el correo (la identidad firmada), mientras que
+nombre y rol se releen en cada petición. Así, cambiar el nombre o el rol de alguien en el Studio
+se refleja en la barra superior del panel sin esperar a que vuelva a entrar.
+
 **Gestión desde el Studio.** El tipo `adminUser` está desplegado (ago. 2026) y aparece en
 <https://mipremio.sanity.studio/> bajo **"Administradores del panel"**. Dar de alta a alguien es
 crear el documento y **publicarlo**; revocarlo es desmarcar "Activo".
@@ -315,8 +322,27 @@ crear el documento y **publicarlo**; revocarlo es desmarcar "Activo".
 Su definición vive en el repositorio del Studio, `../studio-mi-premio-cms`:
 `schemaTypes/documents/adminUser.ts`, registrado en `schemaTypes/index.ts` y en `structure.ts`.
 
-> Hoy los roles se guardan pero **no diferencian permisos**: cualquier administrador activo ve
-> todos los informes. El campo existe para cuando el panel tenga módulos de escritura.
+### Roles y permisos
+
+Definidos en `src/lib/admin-roles.ts` — módulo **sin dependencias de servidor** a propósito, para
+poder compartirlo con los Client Components (importar `lib/admin.ts` desde el cliente arrastraría
+`next/headers` y el cliente de Sanity al bundle del navegador).
+
+| Rol | Informes | Gestionar administradores |
+|---|---|---|
+| `owner` (Propietario) | Sí | Sí, incluidos otros propietarios |
+| `admin` (Administrador) | Sí | Sí, salvo propietarios |
+| `viewer` (Consulta) | Sí | No |
+
+Dos reglas sostienen el modelo, y ambas existen para impedir escaladas de privilegio:
+
+- **Nadie otorga un rol por encima del suyo** (`canAssignRole`): un `admin` no puede crear ni
+  ascender a un `owner`.
+- **Nadie modifica una cuenta con más privilegio que la suya**: un `admin` no puede desactivar a
+  un `owner`.
+
+> Los roles **no** acotan qué informes se ven: cualquier administrador activo los ve todos. Lo que
+> acotan es la gestión de administradores.
 
 ### Autenticación
 
@@ -337,6 +363,35 @@ diferencias:
 | `/api/admin/auth/me` | GET | Administrador de la sesión (401 si no hay o fue revocado) |
 | `/api/admin/auth/logout` | POST | Expira la cookie |
 
+### Módulo Usuarios — `/admin/usuarios`
+
+Primer módulo de **escritura** del panel. Da de alta administradores sin pasar por el Studio.
+Solo visible y accesible para `owner` y `admin`; a un `viewer` la página lo devuelve a Informes.
+
+| Endpoint | Método | Descripción |
+|---|---|---|
+| `/api/admin/users` | GET | Lista todos los administradores, activos e inactivos |
+| `/api/admin/users` | POST | Alta: `{ name, email, role }` |
+| `/api/admin/users/[id]` | PATCH | Cambia `role` o `active` |
+
+Todos exigen `requireAdminManager()` (sesión válida + admin activo + permiso de gestión).
+
+**Salvaguardas** — cada una responde a una forma concreta de romper el panel:
+
+| Regla | Qué evita |
+|---|---|
+| El correo se normaliza a minúsculas y se rechazan duplicados (409) | Que `getAdminByEmail` quede ambiguo y conceda el rol equivocado |
+| No puedes cambiar tu propia cuenta (400) | Dejarte fuera del panel, o ascenderte a ti mismo |
+| No puedes tocar a quien tiene más privilegio (403) | Que un `admin` desactive a un propietario |
+| No se puede desactivar ni degradar al **último propietario activo** (409) | Un estado sin propietarios, irreversible desde la propia aplicación |
+
+El alta usa un `_id` determinístico derivado del correo (`adminUser.<correo-saneado>`), de modo
+que un duplicado choca a nivel de documento y no solo en la comprobación previa. Se crea
+**publicado** (sin prefijo `drafts.`): un borrador no daría acceso y confundiría a quien lo crea.
+
+> **No hay borrado**, solo desactivación: revoca el acceso igual de rápido, es reversible y
+> conserva el rastro de quién tuvo acceso. Para eliminar de verdad está el Studio.
+
 ### Informes — `/api/admin/reports/*`
 
 Todos exigen `requireActiveAdmin()` y aceptan `?format=csv` y `?refresh=1` (salta la caché).
@@ -350,6 +405,40 @@ Todos exigen `requireActiveAdmin()` y aceptan `?format=csv` y `?refresh=1` (salt
 
 El CSV usa `;` como separador y lleva BOM, porque el destino real es Excel en español; los
 valores que empiezan por `= + - @` se neutralizan para que Excel no los ejecute como fórmula.
+
+### Paginación
+
+`redemptions`, `affiliates` y `expiring` paginan **en el servidor** (`page`, `pageSize`; 25 por
+defecto, 200 como máximo) y devuelven un objeto `pagination` con `total`, `totalPages`, `from` y
+`to`. Se hace en el servidor y no en el navegador porque el informe de vencimientos produce miles
+de lotes: enviarlos todos para recortarlos en el cliente desperdiciaría la transferencia y
+montaría un DOM enorme.
+
+Tres invariantes de `src/lib/pagination.ts` que hay que respetar al tocar un informe:
+
+1. **Los resúmenes se calculan sobre el conjunto completo ya filtrado**, antes de paginar. Si no,
+   las tarjetas mostrarían el total de la página en vez del total real.
+2. **El CSV no se pagina**: exporta todo lo filtrado, ignorando `page`/`pageSize`.
+3. Si `page` se pasa del final (por ejemplo al aplicar un filtro que deja menos páginas), se
+   devuelve la última página existente en vez de una lista vacía; el cliente sincroniza su estado
+   con la página que respondió el servidor.
+
+### Estructura de la interfaz
+
+Cada sección es una ruta propia bajo `/admin/informes/<slug>`, no una pestaña en memoria, así que
+se puede enlazar y compartir. Los slugs se declaran en
+`src/views/admin/informes/sections.ts`, única fuente de verdad para el submenú de la barra
+lateral, la validación del slug y el título de cada página; un slug desconocido responde 404.
+
+| Archivo | Rol |
+|---|---|
+| `sections.ts` | registro de secciones (slug, etiqueta, título, descripción) |
+| `shared.tsx` | tipos, `useReport`, `usePagination` y el contexto de recarga |
+| `InformesShell.tsx` | encabezado común y botón "Actualizar datos" |
+| `resumen.tsx`, `redenciones.tsx`, `afiliados.tsx`, `por-vencer.tsx` | una sección cada uno |
+
+El token de recarga viaja por **contexto** desde `InformesShell`: al ser cada sección una ruta
+independiente, ya no existe un componente padre que pueda pasarlo por props.
 
 ### Cómo se calculan las cifras (`src/lib/zoho-reports.ts`)
 
@@ -611,7 +700,7 @@ Ordenados por severidad.
 | 4 | **Estado en memoria del proceso** | Códigos de login y token de Zoho no se comparten entre instancias → logins fallidos intermitentes | Redis con TTL para los códigos; caché compartido o token por request para Zoho |
 | 5 | **Redención sin transacción** | Un fallo a mitad de los tramos deja redenciones parciales en Zoho sin rollback | Registrar el intento antes de escribir en Zoho y reconciliar en el cron |
 | 6 | **Sin rate limiting** | `send-code` (afiliados **y** admin) permite enviar correos ilimitados a cualquier dirección válida | Límite por IP y por email |
-| 6b | **Roles del panel sin efecto** | `owner`/`admin`/`viewer` se guardan pero no diferencian permisos: cualquier admin activo ve todos los informes | Aplicar el rol cuando el panel tenga módulos de escritura |
+| ~~6b~~ | ~~**Roles del panel sin efecto**~~ | **Resuelto** (ago. 2026): los roles gobiernan la gestión de administradores (§5.b). Siguen sin acotar qué informes se ven, que es el comportamiento deseado hoy | — |
 | ~~6c~~ | ~~**Esquema `adminUser` fuera del Studio**~~ | **Resuelto** (ago. 2026): desplegado desde `../studio-mi-premio-cms`; el equipo gestiona administradores desde el Studio | — |
 | 7 | **Sin webhook de revalidación** | Los cambios editoriales tardan hasta 60 s | Endpoint `revalidateTag` + webhook de Sanity |
 | 8 | **Esquema de Sanity fuera del repo** | Un cambio en el Studio puede romper queries y tipos sin aviso en CI | Versionar el esquema o generar tipos con `sanity typegen` |
@@ -655,10 +744,12 @@ curl "http://localhost:3000/api/cron/sync-redemptions?debug=1" \
 | Agregar un campo de Zoho al perfil | `src/lib/zoho.ts` (interfaz + lista `fields`) → `src/app/api/user/membership/route.ts` → `src/views/PerfilAfiliadoView.tsx` |
 | Cambiar contenido editorial | Sanity Studio (remoto); si es un campo nuevo: `queries.ts` + `types.ts` |
 | Nueva ruta protegida | `middleware.ts` (`PROTECTED_PATHS` **y** `matcher`) + carpeta en `(protected-routes)` |
-| Dar de alta un administrador | Studio → "Administradores del panel": crear y **publicar** con `active: true` |
+| Dar de alta un administrador | Panel → Usuarios (o Studio → "Administradores del panel", creando y **publicando**) |
+| Cambiar quién puede gestionar administradores | `canManageAdmins` en `src/lib/admin-roles.ts` |
 | Cambiar un esquema de Sanity | Repositorio `../studio-mi-premio-cms` → `npm run deploy` (nunca por MCP) |
 | Nuevo módulo del panel | `NAV_ITEMS` en `src/views/admin/AdminShell.tsx` + carpeta en `src/app/admin/` |
-| Nuevo informe o columna | `src/lib/zoho-reports.ts` (agregación) → route handler en `src/app/api/admin/reports/` → pestaña en `src/views/admin/AdminInformesView.tsx` |
+| Nueva sección de informes | `INFORME_SECTIONS` en `src/views/admin/informes/sections.ts` + su componente + entrada en `SECTION_COMPONENTS` de `[seccion]/page.tsx` |
+| Nuevo informe o columna | `src/lib/zoho-reports.ts` (agregación) → route handler en `src/app/api/admin/reports/` → sección en `src/views/admin/informes/` |
 | Ajustar plantillas de correo | `src/lib/email.ts` |
 | Nuevos estados de redención | `mapBitacoraToStatus` / `mapEstadoRedencion` en `src/app/api/cron/sync-redemptions/route.ts` |
 | Colores / tipografía | `src/app/globals.css` (`--custom-green: #417D30`, `--accent: #F24E1E`) |
