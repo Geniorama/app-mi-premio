@@ -15,6 +15,11 @@ import {
   verifyAdminSessionToken,
   type AdminSessionUser,
 } from "@/lib/session";
+import {
+  canManageAdmins,
+  roleRank,
+  DEFAULT_ADMIN_ROLE,
+} from "@/lib/admin-roles";
 
 export interface AdminUser {
   _id: string;
@@ -24,11 +29,8 @@ export interface AdminUser {
   active?: boolean;
 }
 
-/** Roles soportados, de mayor a menor privilegio. */
-export const ADMIN_ROLES = ["owner", "admin", "viewer"] as const;
-
-/** Índice de privilegio: cuanto mayor, menos permisos. */
-const ROLE_RANK: Record<string, number> = { owner: 0, admin: 1, viewer: 2 };
+// Los roles y sus reglas viven en `lib/admin-roles.ts`, sin dependencias de
+// servidor, para poder compartirlos con los Client Components.
 
 /**
  * Busca un administrador activo por correo. Devuelve null si no existe,
@@ -61,8 +63,8 @@ export async function getAdminByEmail(
 
     return [...matches].sort(
       (a, b) =>
-        (ROLE_RANK[b.role ?? "viewer"] ?? 99) -
-        (ROLE_RANK[a.role ?? "viewer"] ?? 99)
+        roleRank(b.role ?? DEFAULT_ADMIN_ROLE) -
+        roleRank(a.role ?? DEFAULT_ADMIN_ROLE)
     )[0];
   } catch (error) {
     // Un fallo de Sanity no debe interpretarse como "es admin".
@@ -85,6 +87,11 @@ export async function getAdminSession(): Promise<AdminSessionUser | null> {
  * Sesión válida + administrador todavía activo en Sanity.
  * Úsalo en los route handlers del panel: revocar un admin en el Studio
  * corta el acceso sin esperar a que expire su cookie.
+ *
+ * Devuelve los datos **frescos de Sanity**, no la instantánea que guardó el
+ * token al iniciar sesión. El correo es lo único que aporta la cookie (es la
+ * identidad firmada); nombre y rol se releen, de modo que cambiarlos en el
+ * Studio se refleja en el panel sin esperar a que la persona vuelva a entrar.
  */
 export async function requireActiveAdmin(): Promise<AdminSessionUser | null> {
   const session = await getAdminSession();
@@ -93,5 +100,20 @@ export async function requireActiveAdmin(): Promise<AdminSessionUser | null> {
   const admin = await getAdminByEmail(session.email);
   if (!admin || admin.active === false) return null;
 
-  return session;
+  return {
+    email: admin.email.toLowerCase().trim(),
+    fullName: admin.name || admin.email,
+    adminId: admin._id,
+    role: admin.role || DEFAULT_ADMIN_ROLE,
+  };
+}
+
+/**
+ * Como `requireActiveAdmin`, pero además exige permiso para gestionar
+ * administradores. Puerta de entrada del módulo de usuarios.
+ */
+export async function requireAdminManager(): Promise<AdminSessionUser | null> {
+  const admin = await requireActiveAdmin();
+  if (!admin || !canManageAdmins(admin.role)) return null;
+  return admin;
 }
