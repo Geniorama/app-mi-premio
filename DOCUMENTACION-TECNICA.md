@@ -8,7 +8,7 @@ redenciones que se registran en Zoho y se auditan en Sanity.
 - **Repositorio:** `git@github.com:Geniorama/app-mi-premio.git`
 - **Rama principal:** `main`
 - **Dominio de producción:** `https://mipremiogermanmoraleshoteles.com`
-- **Última actualización de este documento:** 24 de julio de 2026
+- **Última actualización de este documento:** 4 de agosto de 2026
 
 ---
 
@@ -107,15 +107,26 @@ src/
 | `/gracias` | SSR, `noindex` | `graciasPage` | **Sí** |
 | `/auth/login` | SSR, `noindex` | `loginPage` | Redirige a `/perfil` si hay sesión |
 | `/auth/logout` | Client | Llama a `/api/auth/logout` y redirige a `/` | No |
+| `/admin` | Redirect | Redirige a `/admin/informes` | **Sí** (admin) |
+| `/admin/informes` | SSR dinámico, `noindex` | Panel de informes | **Sí** (admin) |
+| `/admin/login` | SSR, `noindex` | Acceso al panel | Redirige a `/admin/informes` si hay sesión |
 
 `middleware.ts` protege `/perfil`, `/extractos` y `/gracias` (con sus subrutas) y redirige a
 `/auth/login` cuando no hay cookie de sesión válida. El `matcher` está declarado explícitamente:
 
 ```ts
-matcher: ["/perfil/:path*", "/extractos/:path*", "/gracias/:path*", "/auth/login"]
+matcher: [
+  "/perfil/:path*", "/extractos/:path*", "/gracias/:path*",
+  "/auth/login", "/admin/:path*",
+]
 ```
 
 > Al agregar una ruta protegida hay que actualizar **dos** listas: `PROTECTED_PATHS` y `matcher`.
+
+El bloque `/admin` se resuelve antes que el de afiliados y usa su propia cookie. El middleware
+corre en Edge y **solo puede validar la firma de la cookie**: no consulta Sanity. La revalidación
+de que el administrador sigue activo la hacen la página y los route handlers con
+`requireActiveAdmin()` — así, desactivar a alguien en el Studio le cierra el panel de inmediato.
 
 ---
 
@@ -138,14 +149,28 @@ Cookie httpOnly "mi-premio-session" (7 días) → redirect a /perfil
 
 ### Cookie de sesión
 
-`src/lib/session.ts` — cookie `mi-premio-session`, `httpOnly`, `sameSite: lax`,
-`secure` en producción, `maxAge` 7 días. El payload es
-`{ email, fullName, contactId, exp }` serializado en JSON y codificado en **base64url**.
+`src/lib/session.ts` — token **firmado con HMAC-SHA256**, en formato
+`<payload base64url>.<firma base64url>`. Usa Web Crypto (no `node:crypto`) porque el middleware
+corre en el runtime Edge, así que todas las funciones son asíncronas.
 
-> ⚠️ **No está firmada ni cifrada.** Es reversible y forjable por el cliente: cualquiera puede
-> construir una cookie con otro email y leer la membresía de ese afiliado. El propio archivo lo
-> anota como pendiente ("para producción considera JWT firmado o sesiones en DB"). Es la
-> deuda de seguridad más relevante del proyecto — ver §10.
+| Cookie | Ámbito | Duración | Payload |
+|---|---|---|---|
+| `mi-premio-session` | `user` | 7 días | `{ email, fullName, contactId }` |
+| `mi-premio-admin-session` | `admin` | 12 horas | `{ email, fullName, adminId, role }` |
+
+Ambas son `httpOnly`, `sameSite: lax` y `secure` en producción. El campo `scope` del payload
+impide que un token de afiliado sirva en el panel administrativo y viceversa.
+
+El secreto sale de `SESSION_SECRET` (respaldo: `CRON_SECRET`). **Si no hay ninguno, la firma
+lanza excepción**: es un fallo ruidoso a propósito, no un modo degradado que acepte cualquier
+cookie.
+
+> El payload sigue siendo legible (base64url, no cifrado): nunca debe llevar secretos. Lo que la
+> firma garantiza es que el cliente no puede alterarlo.
+
+> ⚠️ **Cambiar `SESSION_SECRET` invalida todas las sesiones activas** — afiliados y
+> administradores tendrán que volver a entrar. Rotarlo es justamente el mecanismo para expulsar
+> a todo el mundo.
 
 ### Códigos de verificación
 
@@ -268,6 +293,101 @@ para descubrir nombres API de subformularios desconocidos.
 
 ---
 
+## 5.b Panel administrativo (`/admin`)
+
+Área separada del sitio de afiliados: vive fuera de `(main)`, así que no hereda Header ni Footer,
+y se marca `noindex`. Su primer y único módulo es **Informes**.
+
+### Quién es administrador
+
+Documentos `adminUser` de Sanity — los administradores **no son contactos del CRM**, así que el
+flujo OTP no valida contra Zoho. Solo cuenta el documento **publicado** y con `active == true`:
+un borrador en el Studio no otorga acceso.
+
+`getAdminByEmail()` devuelve una lista y se queda con el de **menor privilegio** si hubiera
+varios documentos con el mismo correo, además de dejar un `console.warn`. Ante una configuración
+ambigua conviene conceder de menos.
+
+**Gestión desde el Studio.** El tipo `adminUser` está desplegado (ago. 2026) y aparece en
+<https://mipremio.sanity.studio/> bajo **"Administradores del panel"**. Dar de alta a alguien es
+crear el documento y **publicarlo**; revocarlo es desmarcar "Activo".
+
+Su definición vive en el repositorio del Studio, `../studio-mi-premio-cms`:
+`schemaTypes/documents/adminUser.ts`, registrado en `schemaTypes/index.ts` y en `structure.ts`.
+
+> Hoy los roles se guardan pero **no diferencian permisos**: cualquier administrador activo ve
+> todos los informes. El campo existe para cuando el panel tenga módulos de escritura.
+
+### Autenticación
+
+Mismo mecanismo que el de afiliados (código de 6 dígitos por correo, TTL 10 min), con tres
+diferencias:
+
+1. Los códigos se guardan con ámbito (`admin:<correo>` vs `user:<correo>`), así que no se pisan
+   ni son intercambiables.
+2. `send-code` responde **siempre lo mismo** exista o no el administrador, para no revelar qué
+   correos tienen acceso al panel.
+3. `verify-code` revalida contra Sanity antes de emitir la cookie: si desactivaron la cuenta
+   mientras el código estaba vigente, no entra.
+
+| Endpoint | Método | Descripción |
+|---|---|---|
+| `/api/admin/auth/send-code` | POST | Envía el código si el correo es un `adminUser` activo |
+| `/api/admin/auth/verify-code` | POST | Verifica, revalida y emite `mi-premio-admin-session` |
+| `/api/admin/auth/me` | GET | Administrador de la sesión (401 si no hay o fue revocado) |
+| `/api/admin/auth/logout` | POST | Expira la cookie |
+
+### Informes — `/api/admin/reports/*`
+
+Todos exigen `requireActiveAdmin()` y aceptan `?format=csv` y `?refresh=1` (salta la caché).
+
+| Endpoint | Contenido | Filtros |
+|---|---|---|
+| `overview` | KPIs del programa, serie mensual de redenciones, top afiliados, top bonos | — |
+| `redemptions` | Redenciones de Zoho enriquecidas con la auditoría de Sanity | `from`, `to`, `estado`, `bono`, `origen`, `q` |
+| `affiliates` | Una fila por red de membresía | `q`, `tipo`, `conSaldo`, `sort`, `dir` |
+| `expiring` | Lotes de puntos con su fecha de vencimiento | `dias`, `incluirVencidos`, `q` |
+
+El CSV usa `;` como separador y lleva BOM, porque el destino real es Excel en español; los
+valores que empiezan por `= + - @` se neutralizan para que Excel no los ejecute como fórmula.
+
+### Cómo se calculan las cifras (`src/lib/zoho-reports.ts`)
+
+Verificado contra el CRM real (304 membresías, 239 Padre / 64 Hija, 21 redenciones):
+
+- **La lista de `Membresias` ya trae los agregados que Zoho calcula** (`TOTAL_PUNTOS`,
+  `PUNTOS_DIPONIBLES` —sí, con esa errata en el nombre API—, `PUNTOS_VENCIDOS`,
+  `Puntos_Globales_Red`, `Contacto_Membresia`, `Membresia_No`, `Tipo_Afiliado_1`). Por eso todo
+  el informe se arma con 2-3 llamadas en vez de una por afiliado.
+- **`PUNTOS_REDIMIDOS` no es fiable**: solo está poblado en 4 de 239 registros. Los puntos
+  redimidos se calculan desde el módulo `Redenciones`, excluyendo las canceladas y rechazadas.
+- **COQL no está disponible**: el token OAuth actual responde `OAUTH_SCOPE_MISMATCH`. Toda la
+  agregación ocurre en el servidor.
+- **Un afiliado = una red** (Padre + sus Hijas). El saldo autoritativo es `Puntos_Globales_Red`
+  del Padre, el mismo criterio que usa `/api/user/membership`, para que panel y perfil nunca
+  muestren cifras distintas.
+- **`Categor_a` no existe en Zoho**: el código lo referencia pero siempre llega vacío.
+
+**Puntos por vencer.** El detalle de vencimientos vive en el subformulario `Puntos_Membresia`,
+que Zoho solo entrega en el GET individual: es el informe caro (≈300 peticiones, ~20 s la primera
+vez, concurrencia 6, caché 15 min). Dos ajustes importantes sobre el dato crudo:
+
+1. Se **excluyen los lotes `Cancelado`** — son puntos anulados y coinciden exactamente con lo que
+   Zoho reporta en `PUNTOS_VENCIDOS`.
+2. Se aplica **consumo FIFO** contra el saldo autoritativo de la red. Hace falta porque Zoho casi
+   nunca escribe `Puntos_Redimidos` de vuelta en la fila del subformulario: el consumo se refleja
+   en el saldo del registro. Sin este ajuste, la suma de lotes de quien ya redimió supera su saldo
+   real y el informe sobreestima. Con él, la suma de lotes cuadra al peso con el saldo global.
+
+### Caché
+
+Los informes se cachean en memoria del proceso (5 min las listas, 15 min los lotes). Igual que el
+token de Zoho y los códigos de login, **no se comparte entre instancias serverless**: cada una
+mantiene la suya. Para informes es aceptable —el peor caso es ver datos más frescos de lo
+necesario—, pero conviene saberlo. El botón "Actualizar datos" del panel fuerza `?refresh=1`.
+
+---
+
 ## 6. Integración con Zoho CRM
 
 `src/lib/zoho.ts` concentra toda la comunicación. Base: `https://www.zohoapis.com/crm/v6`
@@ -329,10 +449,12 @@ de `redFifo`.
 ## 7. Sanity CMS
 
 - **Proyecto:** `eq7vsxjb` · **Dataset:** `production` · **API version:** `2024-10-01` (default).
-- **Studio remoto**, alojado en Sanity: **el esquema no está en este repositorio.** Los cambios de
-  esquema se hacen en el Studio, no aquí. Los tipos de `src/sanity/types.ts` y las queries de
-  `src/sanity/queries.ts` son un espejo manual del esquema y deben actualizarse a mano cuando el
-  Studio cambie.
+- **Studio en repositorio aparte.** El esquema no está aquí, pero **sí tiene código fuente**: vive
+  en `../studio-mi-premio-cms` (`git@github.com:Geniorama/studio-mi-premio-cms.git`), desplegado en
+  <https://mipremio.sanity.studio/>. Los cambios de esquema se hacen ahí y se publican con
+  `npm run deploy`; **no** con las herramientas de esquema gestionado por MCP, que harían divergir
+  el esquema desplegado de la fuente. Los tipos de `src/sanity/types.ts` y las queries de
+  `src/sanity/queries.ts` son un espejo manual y deben actualizarse a mano cuando el Studio cambie.
 - **Clientes:**
   - `sanityClient` — lectura, `useCdn: true`, `perspective: "published"`.
   - `sanityWriteClient` — escritura, `useCdn: false`, `perspective: "raw"`, requiere
@@ -354,6 +476,11 @@ de `redFifo`.
 | `legalPage` | páginas legales por slug (términos, privacidad) |
 | `redemption` | auditoría: `zohoRedemptionId`, `zohoMembershipId`, `email`, `pointsRedeemed`, referencia al `voucher`, `status`, `redeemedAt`, `termsAcceptedAt`, `deliveryEmail`, `processedAt` |
 | `userProfile` | avatar del afiliado, `_id` determinístico `userProfile.<contactId>` |
+| `adminUser` | acceso al panel: `email`, `name`, `role`, `active` (ver §5.b) |
+
+> `userProfile` **no está en el esquema desplegado del Studio**: la app lo escribe por API (Sanity
+> acepta tipos fuera del esquema desplegado). Funciona, pero no es editable desde el Studio hasta
+> que se agregue su definición. `adminUser` sí está desplegado desde agosto de 2026.
 
 Solo se listan bonos con `active == true`, ordenados por `coalesce(order, 9999) asc, _createdAt desc`.
 `vouchersFeaturedQuery` limita a 12 los marcados con `featuredInPerfil`.
@@ -400,6 +527,7 @@ Archivo local: `.env.local` (ignorado por git — el `.gitignore` cubre `.env*`)
 |---|---|---|
 | `NEXT_PUBLIC_APP_URL` | Recomendada | base de canonicals, OG y enlaces/logos en correos. Default `https://mipremiogermanmoraleshoteles.com` |
 | `CRON_SECRET` | **Sí** | protege el cron y los endpoints de prueba de correo |
+| `SESSION_SECRET` | **Sí** | firma HMAC de las cookies de sesión. Sin él (ni `CRON_SECRET`) el login falla con excepción. Cambiarlo cierra todas las sesiones activas |
 | `DEV_LOGIN_ENABLED` | No | `"true"` habilita `dev-login`. **No definir en producción** |
 
 ---
@@ -416,13 +544,19 @@ Sanity.
 ### Checklist de despliegue
 
 1. Cargar todas las variables de §8 en el entorno (Vercel u equivalente).
-2. Verificar que `DEV_LOGIN_ENABLED` **no** esté definida.
-3. Confirmar que el remitente de ZeptoMail está verificado para el dominio.
-4. Registrar el dominio de producción como **CORS origin** en el proyecto de Sanity.
-5. Configurar la ejecución periódica de `GET /api/cron/sync-redemptions` con el header
+2. **Definir `SESSION_SECRET`** con un valor aleatorio largo. Sin él (ni `CRON_SECRET`) el login
+   falla con excepción, y cambiarlo después cierra todas las sesiones activas.
+3. Verificar que existe al menos un `adminUser` publicado y activo, o nadie podrá entrar a
+   `/admin`.
+4. Verificar que `DEV_LOGIN_ENABLED` **no** esté definida.
+5. Confirmar que el remitente de ZeptoMail está verificado para el dominio.
+6. Registrar el dominio de producción como **CORS origin** en el proyecto de Sanity.
+7. Configurar la ejecución periódica de `GET /api/cron/sync-redemptions` con el header
    `Authorization: Bearer $CRON_SECRET`.
-6. Smoke test: login con código real → `/perfil` muestra saldo → detalle de bono → redención de
-   prueba → correos recibidos → documento `redemption` creado en Sanity.
+8. Smoke test afiliado: login con código real → `/perfil` muestra saldo → detalle de bono →
+   redención de prueba → correos recibidos → documento `redemption` creado en Sanity.
+9. Smoke test panel: `/admin/login` con un correo `adminUser` → los cuatro informes cargan →
+   una descarga CSV abre bien en Excel.
 
 ### Cron / sincronización
 
@@ -471,12 +605,14 @@ Ordenados por severidad.
 
 | # | Tema | Riesgo | Acción sugerida |
 |---|---|---|---|
-| 1 | **Cookie de sesión sin firmar** | Cualquiera puede forjar `mi-premio-session` con otro email y leer saldo/historial de ese afiliado, o redimir sus puntos | Firmar con HMAC o migrar a JWT (`jose`) / sesión en servidor |
+| ~~1~~ | ~~**Cookie de sesión sin firmar**~~ | **Resuelto** (ago. 2026): las cookies se firman con HMAC-SHA256 y llevan `scope`. Pendiente derivado: `SESSION_SECRET` debe estar cargada en producción antes del despliegue | — |
 | 2 | **`/api/auth/validate-contact` sin auth** | Enumeración de correos del CRM y fuga de nombre e ID de contacto | Proteger con `CRON_SECRET` o eliminar del build de producción |
 | 3 | **`dev-login` habilitable por env** | Emisión de sesión arbitraria si `DEV_LOGIN_ENABLED=true` llega a producción | Restringir a `NODE_ENV !== "production"` sin escape por variable |
 | 4 | **Estado en memoria del proceso** | Códigos de login y token de Zoho no se comparten entre instancias → logins fallidos intermitentes | Redis con TTL para los códigos; caché compartido o token por request para Zoho |
 | 5 | **Redención sin transacción** | Un fallo a mitad de los tramos deja redenciones parciales en Zoho sin rollback | Registrar el intento antes de escribir en Zoho y reconciliar en el cron |
-| 6 | **Sin rate limiting** | `send-code` permite enviar correos ilimitados a cualquier dirección del CRM | Límite por IP y por email |
+| 6 | **Sin rate limiting** | `send-code` (afiliados **y** admin) permite enviar correos ilimitados a cualquier dirección válida | Límite por IP y por email |
+| 6b | **Roles del panel sin efecto** | `owner`/`admin`/`viewer` se guardan pero no diferencian permisos: cualquier admin activo ve todos los informes | Aplicar el rol cuando el panel tenga módulos de escritura |
+| ~~6c~~ | ~~**Esquema `adminUser` fuera del Studio**~~ | **Resuelto** (ago. 2026): desplegado desde `../studio-mi-premio-cms`; el equipo gestiona administradores desde el Studio | — |
 | 7 | **Sin webhook de revalidación** | Los cambios editoriales tardan hasta 60 s | Endpoint `revalidateTag` + webhook de Sanity |
 | 8 | **Esquema de Sanity fuera del repo** | Un cambio en el Studio puede romper queries y tipos sin aviso en CI | Versionar el esquema o generar tipos con `sanity typegen` |
 | 9 | **Sin pruebas automatizadas ni CI** | El único control es `npm run lint` manual | Tests de `mapBitacoraToStatus`, del reparto FIFO y de `getMembershipByEmail` |
@@ -519,6 +655,10 @@ curl "http://localhost:3000/api/cron/sync-redemptions?debug=1" \
 | Agregar un campo de Zoho al perfil | `src/lib/zoho.ts` (interfaz + lista `fields`) → `src/app/api/user/membership/route.ts` → `src/views/PerfilAfiliadoView.tsx` |
 | Cambiar contenido editorial | Sanity Studio (remoto); si es un campo nuevo: `queries.ts` + `types.ts` |
 | Nueva ruta protegida | `middleware.ts` (`PROTECTED_PATHS` **y** `matcher`) + carpeta en `(protected-routes)` |
+| Dar de alta un administrador | Studio → "Administradores del panel": crear y **publicar** con `active: true` |
+| Cambiar un esquema de Sanity | Repositorio `../studio-mi-premio-cms` → `npm run deploy` (nunca por MCP) |
+| Nuevo módulo del panel | `NAV_ITEMS` en `src/views/admin/AdminShell.tsx` + carpeta en `src/app/admin/` |
+| Nuevo informe o columna | `src/lib/zoho-reports.ts` (agregación) → route handler en `src/app/api/admin/reports/` → pestaña en `src/views/admin/AdminInformesView.tsx` |
 | Ajustar plantillas de correo | `src/lib/email.ts` |
 | Nuevos estados de redención | `mapBitacoraToStatus` / `mapEstadoRedencion` en `src/app/api/cron/sync-redemptions/route.ts` |
 | Colores / tipografía | `src/app/globals.css` (`--custom-green: #417D30`, `--accent: #F24E1E`) |
