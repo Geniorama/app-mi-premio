@@ -171,6 +171,19 @@ export const adminUsersByEmailQuery = groq`
   }
 `;
 
+/** Todos los administradores, activos e inactivos, para el módulo de usuarios. */
+export const adminUsersListQuery = groq`
+  *[_type == "adminUser"] | order(active desc, name asc){
+    _id,
+    email,
+    name,
+    role,
+    active,
+    _createdAt,
+    _updatedAt
+  }
+`;
+
 /**
  * Auditoría de redenciones hechas desde la web. Complementa al módulo
  * Redenciones de Zoho, que no sabe qué bono se pidió ni a dónde se entrega.
