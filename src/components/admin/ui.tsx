@@ -276,6 +276,167 @@ export function ExportButton({ href }: { href: string }) {
   );
 }
 
+// ---------------------------------------------------------------- paginación
+
+export interface PaginationMeta {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  from: number;
+  to: number;
+}
+
+/**
+ * Construye la lista de páginas a mostrar, colapsando los tramos largos con
+ * elipsis: siempre la primera, la última, y una ventana alrededor de la actual.
+ */
+function pageItems(page: number, totalPages: number): Array<number | "gap"> {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const items = new Set<number>([1, totalPages, page]);
+  if (page - 1 > 1) items.add(page - 1);
+  if (page + 1 < totalPages) items.add(page + 1);
+  if (page <= 3) [2, 3, 4].forEach((n) => items.add(n));
+  if (page >= totalPages - 2) {
+    [totalPages - 3, totalPages - 2, totalPages - 1].forEach((n) => items.add(n));
+  }
+
+  const sorted = [...items].filter((n) => n >= 1 && n <= totalPages).sort((a, b) => a - b);
+
+  const result: Array<number | "gap"> = [];
+  let previous = 0;
+  for (const value of sorted) {
+    if (previous && value - previous > 1) result.push("gap");
+    result.push(value);
+    previous = value;
+  }
+  return result;
+}
+
+const PAGE_SIZES = [25, 50, 100, 200];
+
+export function Pagination({
+  meta,
+  onPageChange,
+  onPageSizeChange,
+  itemLabel = "registros",
+}: {
+  meta: PaginationMeta;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  itemLabel?: string;
+}) {
+  const { page, pageSize, total, totalPages, from, to } = meta;
+
+  // Con una sola página basta el conteo; los controles no aportan nada.
+  const showControls = totalPages > 1;
+
+  return (
+    <nav
+      aria-label="Paginación"
+      className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-3"
+    >
+      <p className="text-xs text-[#52514e]" aria-live="polite">
+        {total === 0
+          ? `Sin ${itemLabel}`
+          : `${formatNumber(from)}–${formatNumber(to)} de ${formatNumber(total)} ${itemLabel}`}
+      </p>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-1.5 text-xs text-[#52514e]">
+          Por página
+          <select
+            className="h-8 rounded-lg border border-black/15 bg-white px-1.5 text-sm text-[#0b0b0b] outline-none focus:border-custom-green"
+            value={pageSize}
+            onChange={(event) => onPageSizeChange(Number(event.target.value))}
+          >
+            {PAGE_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {showControls && (
+          <div className="flex items-center gap-1">
+            <PageButton
+              label="Anterior"
+              disabled={page <= 1}
+              onClick={() => onPageChange(page - 1)}
+            >
+              ‹
+            </PageButton>
+
+            {pageItems(page, totalPages).map((item, index) =>
+              item === "gap" ? (
+                <span
+                  key={`gap-${index}`}
+                  aria-hidden="true"
+                  className="px-1 text-xs text-[#898781]"
+                >
+                  …
+                </span>
+              ) : (
+                <PageButton
+                  key={item}
+                  label={`Página ${item}`}
+                  active={item === page}
+                  onClick={() => onPageChange(item)}
+                >
+                  {item}
+                </PageButton>
+              )
+            )}
+
+            <PageButton
+              label="Siguiente"
+              disabled={page >= totalPages}
+              onClick={() => onPageChange(page + 1)}
+            >
+              ›
+            </PageButton>
+          </div>
+        )}
+      </div>
+    </nav>
+  );
+}
+
+function PageButton({
+  children,
+  label,
+  onClick,
+  disabled,
+  active,
+}: {
+  children: ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      aria-current={active ? "page" : undefined}
+      className={`h-8 min-w-8 cursor-pointer rounded-lg border px-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        active
+          ? "border-custom-green bg-custom-green font-semibold text-white"
+          : "border-black/15 bg-white text-[#0b0b0b] hover:border-custom-green hover:text-custom-green"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function Spinner({ label = "Cargando informe…" }: { label?: string }) {
   return (
     <p className="py-12 text-center text-sm text-[#52514e]" role="status">

@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { requireActiveAdmin } from "@/lib/admin";
 import { buildAffiliateReport } from "@/lib/zoho-reports";
 import { toCsv, csvResponse, formatDateTimeForCsv } from "@/lib/csv";
+import { parsePagination, paginate } from "@/lib/pagination";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -62,6 +63,7 @@ export async function GET(request: NextRequest) {
       return left.localeCompare(right) * direction;
     });
 
+    // El CSV exporta todo lo filtrado, nunca solo la página visible.
     if (params.get("format") === "csv") {
       const csv = toCsv(rows, [
         { key: "nombre", header: "Afiliado", value: (r) => r.nombre },
@@ -87,14 +89,20 @@ export async function GET(request: NextRequest) {
       return csvResponse(csv, "afiliados");
     }
 
+    // El resumen se calcula sobre el conjunto completo, antes de paginar
+    const resumen = {
+      afiliados: rows.length,
+      puntosEntregados: rows.reduce((t, r) => t + r.puntosEntregados, 0),
+      puntosRedimidos: rows.reduce((t, r) => t + r.puntosRedimidos, 0),
+      saldoDisponible: rows.reduce((t, r) => t + r.saldoDisponible, 0),
+    };
+
+    const { rows: pageRows, pagination } = paginate(rows, parsePagination(params));
+
     return NextResponse.json({
-      rows,
-      resumen: {
-        afiliados: rows.length,
-        puntosEntregados: rows.reduce((t, r) => t + r.puntosEntregados, 0),
-        puntosRedimidos: rows.reduce((t, r) => t + r.puntosRedimidos, 0),
-        saldoDisponible: rows.reduce((t, r) => t + r.saldoDisponible, 0),
-      },
+      rows: pageRows,
+      pagination,
+      resumen,
       tipos: [...new Set(report.affiliates.map((r) => r.tipoAfiliado))].filter(Boolean),
       generadoEn: new Date().toISOString(),
     });

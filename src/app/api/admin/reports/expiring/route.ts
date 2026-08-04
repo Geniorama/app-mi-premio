@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { requireActiveAdmin } from "@/lib/admin";
 import { listPointsLots } from "@/lib/zoho-reports";
 import { toCsv, csvResponse, formatDateTimeForCsv } from "@/lib/csv";
+import { parsePagination, paginate } from "@/lib/pagination";
 
 /**
  * Informe de puntos próximos a vencer.
@@ -46,6 +47,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // El CSV exporta todo lo filtrado, nunca solo la página visible.
     if (params.get("format") === "csv") {
       const csv = toCsv(rows, [
         { key: "nombre", header: "Afiliado", value: (r) => r.nombre },
@@ -94,15 +96,21 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    // Ventanas y resumen se calculan sobre el conjunto completo, antes de paginar
+    const resumen = {
+      lotes: rows.length,
+      puntos: rows.reduce((total, lot) => total + lot.saldoLote, 0),
+      afiliados: new Set(rows.map((lot) => lot.rootId)).size,
+      dias: days,
+    };
+
+    const { rows: pageRows, pagination } = paginate(rows, parsePagination(params));
+
     return NextResponse.json({
-      rows,
+      rows: pageRows,
+      pagination,
       ventanas,
-      resumen: {
-        lotes: rows.length,
-        puntos: rows.reduce((total, lot) => total + lot.saldoLote, 0),
-        afiliados: new Set(rows.map((lot) => lot.rootId)).size,
-        dias: days,
-      },
+      resumen,
       generadoEn: new Date().toISOString(),
     });
   } catch (error) {

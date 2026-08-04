@@ -5,6 +5,7 @@ import { buildAffiliateReport } from "@/lib/zoho-reports";
 import { sanityFreshClient } from "@/sanity/client";
 import { redemptionsAuditQuery } from "@/sanity/queries";
 import { toCsv, csvResponse, formatDateTimeForCsv } from "@/lib/csv";
+import { parsePagination, paginate } from "@/lib/pagination";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -118,6 +119,7 @@ export async function GET(request: NextRequest) {
     }
 
     // ---------------------------------------------------------------- salida
+    // El CSV exporta todo lo filtrado, nunca solo la página visible.
     if (params.get("format") === "csv") {
       const csv = toCsv(rows, [
         { key: "nombre", header: "Redención", value: (r) => r.nombre },
@@ -142,18 +144,24 @@ export async function GET(request: NextRequest) {
       return csvResponse(csv, "redenciones");
     }
 
+    // El resumen se calcula sobre el conjunto completo, antes de paginar
     const totalPuntos = rows.reduce((total, row) => total + row.puntos, 0);
     const porEstado: Record<string, number> = {};
     for (const row of rows) porEstado[row.estado] = (porEstado[row.estado] ?? 0) + 1;
 
+    const resumen = {
+      redenciones: rows.length,
+      puntos: totalPuntos,
+      porEstado,
+      desdeWeb: rows.filter((row) => row.origenWeb).length,
+    };
+
+    const { rows: pageRows, pagination } = paginate(rows, parsePagination(params));
+
     return NextResponse.json({
-      rows,
-      resumen: {
-        redenciones: rows.length,
-        puntos: totalPuntos,
-        porEstado,
-        desdeWeb: rows.filter((row) => row.origenWeb).length,
-      },
+      rows: pageRows,
+      pagination,
+      resumen,
       generadoEn: new Date().toISOString(),
     });
   } catch (error) {
