@@ -150,3 +150,46 @@ export const legalPageBySlugQuery = groq`
 export const legalPageSlugsQuery = groq`
   *[_type == "legalPage" && defined(slug.current)].slug.current
 `;
+
+// ----------------------------------------------------- panel administrativo
+
+/**
+ * Administradores activos con un correo dado. `lower(email)` normaliza el dato
+ * tal como lo guardó el editor en el Studio.
+ *
+ * Devuelve una lista, no el primer resultado: si por error existen dos
+ * documentos con el mismo correo, quien llama decide con cuál se queda en vez
+ * de depender del orden que devuelva Sanity.
+ */
+export const adminUsersByEmailQuery = groq`
+  *[_type == "adminUser" && lower(email) == $email && active == true] | order(_id asc){
+    _id,
+    email,
+    name,
+    role,
+    active
+  }
+`;
+
+/**
+ * Auditoría de redenciones hechas desde la web. Complementa al módulo
+ * Redenciones de Zoho, que no sabe qué bono se pidió ni a dónde se entrega.
+ */
+export const redemptionsAuditQuery = groq`
+  *[_type == "redemption"] | order(redeemedAt desc){
+    _id,
+    zohoRedemptionId,
+    zohoMembershipId,
+    email,
+    pointsRedeemed,
+    status,
+    redeemedAt,
+    processedAt,
+    deliveryEmail,
+    deliveryCode,
+    "voucherTitle": voucher->title,
+    "voucherSlug": voucher->slug.current,
+    "voucherCategory": voucher->category,
+    "voucherPoints": voucher->pointsValue
+  }
+`;
