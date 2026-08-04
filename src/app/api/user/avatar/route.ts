@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { parseSessionCookie, SESSION_COOKIE, type SessionUser } from "@/lib/session";
+import { verifySessionToken, SESSION_COOKIE, type SessionUser } from "@/lib/session";
 import { sanityClient } from "@/sanity/client";
 import { sanityWriteClient, assertWriteClient } from "@/sanity/writeClient";
 
@@ -12,7 +12,7 @@ const avatarQuery = `*[_type == "userProfile" && contactId == $contactId][0]{ av
 async function getSessionUser(): Promise<SessionUser | null> {
   const cookieStore = await cookies();
   const value = cookieStore.get(SESSION_COOKIE)?.value;
-  return value ? parseSessionCookie(value) : null;
+  return value ? verifySessionToken(value) : null;
 }
 
 // Documento por usuario con id determinístico para poder reemplazar la foto.

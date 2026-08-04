@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { verifyLoginCode } from "@/lib/auth-codes";
 import { searchContactByEmail, isContactEligibleForLogin } from "@/lib/zoho";
 import {
-  setSessionCookie,
+  createSessionToken,
+  sessionCookieOptions,
   SESSION_COOKIE,
   SESSION_MAX_AGE,
 } from "@/lib/session";
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const sessionValue = setSessionCookie({
+    const sessionValue = await createSessionToken({
       email,
       fullName:
         contact?.Full_Name ||
@@ -53,13 +54,11 @@ export async function POST(request: Request) {
       redirect: "/perfil",
     });
 
-    response.cookies.set(SESSION_COOKIE, sessionValue, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: SESSION_MAX_AGE,
-      path: "/",
-    });
+    response.cookies.set(
+      SESSION_COOKIE,
+      sessionValue,
+      sessionCookieOptions(SESSION_MAX_AGE)
+    );
 
     return response;
   } catch (error) {

@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { setSessionCookie, SESSION_COOKIE, SESSION_MAX_AGE } from "@/lib/session";
+import {
+  createSessionToken,
+  sessionCookieOptions,
+  SESSION_COOKIE,
+  SESSION_MAX_AGE,
+} from "@/lib/session";
 
 /** Solo disponible en desarrollo. NUNCA debe llegar a producción.
  *  POST /api/auth/dev-login
@@ -20,19 +25,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Falta el campo email" }, { status: 400 });
   }
 
-  const sessionValue = setSessionCookie({
+  const sessionValue = await createSessionToken({
     email,
     fullName: fullName || email,
     contactId: contactId || "dev",
   });
 
   const response = NextResponse.json({ ok: true, email });
-  response.cookies.set(SESSION_COOKIE, sessionValue, {
-    httpOnly: true,
-    maxAge: SESSION_MAX_AGE,
-    path: "/",
-    sameSite: "lax",
-  });
+  response.cookies.set(
+    SESSION_COOKIE,
+    sessionValue,
+    sessionCookieOptions(SESSION_MAX_AGE)
+  );
 
   return response;
 }

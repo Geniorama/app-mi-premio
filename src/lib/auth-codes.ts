@@ -11,6 +11,16 @@ interface CodeEntry {
   expiresAt: number;
 }
 
+/**
+ * Ámbito del código. Separa el flujo de afiliados del panel administrativo:
+ * un mismo correo puede pedir código en ambos y los códigos no se pisan
+ * ni son intercambiables.
+ */
+export type CodeScope = "user" | "admin";
+
+const storeKey = (email: string, scope: CodeScope) =>
+  `${scope}:${email.toLowerCase().trim()}`;
+
 // Persiste entre hot-reloads en desarrollo
 const globalForAuthCodes = globalThis as unknown as { codesStore: Map<string, CodeEntry> };
 const codesStore = globalForAuthCodes.codesStore ?? new Map<string, CodeEntry>();
@@ -26,16 +36,16 @@ export function generateLoginCode(): string {
 /**
  * Guarda un código de login asociado a un email.
  */
-export function storeLoginCode(email: string): string {
+export function storeLoginCode(email: string, scope: CodeScope = "user"): string {
   const code = generateLoginCode();
   const normalizedEmail = email.toLowerCase().trim();
 
-  codesStore.set(normalizedEmail, {
+  codesStore.set(storeKey(normalizedEmail, scope), {
     code,
     email: normalizedEmail,
     expiresAt: Date.now() + CODE_EXPIRY_MS,
   });
-  console.log("[auth-codes] Código guardado para:", normalizedEmail);
+  console.log(`[auth-codes] Código guardado (${scope}) para:`, normalizedEmail);
 
   return code;
 }
@@ -43,23 +53,29 @@ export function storeLoginCode(email: string): string {
 /**
  * Verifica si el código coincide para el email dado.
  */
-export function verifyLoginCode(email: string, code: string): boolean {
+export function verifyLoginCode(
+  email: string,
+  code: string,
+  scope: CodeScope = "user"
+): boolean {
   const normalizedEmail = email.toLowerCase().trim();
-  const entry = codesStore.get(normalizedEmail);
+  const key = storeKey(normalizedEmail, scope);
+  const entry = codesStore.get(key);
 
   if (!entry) {
-    console.log("[auth-codes] No hay código para:", normalizedEmail, "| Store keys:", [...codesStore.keys()]);
+    console.log(`[auth-codes] No hay código (${scope}) para:`, normalizedEmail);
     return false;
   }
   if (Date.now() > entry.expiresAt) {
-    codesStore.delete(normalizedEmail);
+    codesStore.delete(key);
     console.log("[auth-codes] Código expirado para:", normalizedEmail);
     return false;
   }
+  // Nunca registrar el código esperado: el log filtraría la credencial.
   const valid = entry.code === code.trim();
   if (!valid) {
-    console.log("[auth-codes] Código no coincide. Esperado:", entry.code, "| Recibido:", code);
+    console.log("[auth-codes] Código incorrecto para:", normalizedEmail);
   }
-  if (valid) codesStore.delete(normalizedEmail);
+  if (valid) codesStore.delete(key);
   return valid;
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { parseSessionCookie, SESSION_COOKIE } from "@/lib/session";
+import { verifySessionToken, SESSION_COOKIE } from "@/lib/session";
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -10,7 +10,7 @@ export async function GET() {
     return NextResponse.json({ user: null }, { status: 401 });
   }
 
-  const user = parseSessionCookie(sessionCookie);
+  const user = await verifySessionToken(sessionCookie);
 
   if (!user) {
     return NextResponse.json({ user: null }, { status: 401 });

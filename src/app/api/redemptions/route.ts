@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { parseSessionCookie, SESSION_COOKIE } from "@/lib/session";
+import { verifySessionToken, SESSION_COOKIE } from "@/lib/session";
 import { getMembershipByEmail, createRedemptionInZoho } from "@/lib/zoho";
 import {
   sendRedemptionAdminEmail,
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
 
   const cookieStore = await cookies();
   const sessionValue = cookieStore.get(SESSION_COOKIE)?.value;
-  const user = sessionValue ? parseSessionCookie(sessionValue) : null;
+  const user = sessionValue ? await verifySessionToken(sessionValue) : null;
   if (!user) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
