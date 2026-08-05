@@ -42,3 +42,7 @@ next-env.d.ts
 
 # reportes internos
 REPORTE-INCIDENCIA-SALDO-PUNTOS.md
+
+# Claude Code: permisos concedidos en cada maquina, no del equipo.
+# La configuracion compartida iria en .claude/settings.json, que si se versiona.
+.claude/settings.local.json
