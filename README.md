@@ -6,6 +6,9 @@ Los afiliados inician sesión con un código enviado por correo, consultan su sa
 historial (datos vivos en **Zoho CRM**), exploran el catálogo de bonos (contenido en **Sanity
 CMS**) y solicitan redenciones que se registran en Zoho y se auditan en Sanity.
 
+Incluye un **panel administrativo** en `/admin` con informes de puntos y redenciones y la gestión
+de quién accede a él.
+
 **Producción:** https://mipremiogermanmoraleshoteles.com
 
 ## Stack
@@ -54,25 +57,31 @@ El listado completo, con defaults y comportamiento cuando faltan, está en
 
 ```
 src/
-├── app/          # App Router: páginas (server) y API routes
-├── components/   # piezas reutilizables
+├── app/          # App Router: páginas (server) y API routes; /admin es el panel
+├── components/   # piezas reutilizables (admin/ = tabla, tarjetas, gráficos)
 ├── views/        # composición por pantalla (client components)
-├── lib/          # integraciones de servidor: zoho, email, session, auth-codes
+├── lib/          # integraciones de servidor: zoho, email, session, auth-codes, admin
 ├── sanity/       # cliente, queries GROQ, tipos, SEO, imágenes
-└── middleware.ts # protección de /perfil, /extractos, /gracias
+└── middleware.ts # protección de /perfil, /extractos, /gracias y /admin
 ```
 
 ## Documentación
 
 **[DOCUMENTACION-TECNICA.md](./DOCUMENTACION-TECNICA.md)** — arquitectura, rutas, flujo de
-autenticación, API interna, integración con Zoho (estructura Padre/Hija y regla FIFO de puntos),
-esquema de Sanity, variables de entorno, despliegue, operación del cron de sincronización y
-deuda técnica conocida.
+autenticación, API interna, panel administrativo, integración con Zoho (estructura Padre/Hija y
+regla FIFO de puntos), esquema de Sanity, variables de entorno, despliegue, operación del cron de
+sincronización y deuda técnica conocida.
+
+**[MANUAL-USUARIO.md](./MANUAL-USUARIO.md)** — guía del panel para el equipo del programa, sin
+tecnicismos: cómo entrar, qué significa cada informe y cómo gestionar accesos.
 
 Notas importantes antes de tocar el código:
 
-- El **esquema de Sanity no está en este repositorio** (Studio remoto). `src/sanity/queries.ts` y
-  `src/sanity/types.ts` son un espejo manual: hay que actualizarlos a mano cuando cambie el Studio.
+- **`SESSION_SECRET` es obligatoria en producción.** Sin ella (ni `CRON_SECRET` como respaldo) la
+  firma de sesión lanza excepción y cae el login, tanto de afiliados como del panel.
+- El **esquema de Sanity vive en otro repositorio**: `Geniorama/studio-mi-premio-cms`, desplegado
+  en https://mipremio.sanity.studio/. `src/sanity/queries.ts` y `src/sanity/types.ts` son un
+  espejo manual: hay que actualizarlos a mano cuando cambie el Studio.
 - **Zoho es la fuente de verdad** del saldo y las redenciones; Sanity guarda contenido y auditoría.
 - Las redenciones consumen los puntos **más antiguos primero (FIFO)** y pueden dividirse en varios
   registros de Zoho.

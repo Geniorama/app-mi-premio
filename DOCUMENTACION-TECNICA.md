@@ -5,9 +5,16 @@ inician sesión con un código enviado por correo, consultan su saldo de puntos 
 (datos vivos en Zoho CRM), exploran el catálogo de bonos (contenido en Sanity CMS) y solicitan
 redenciones que se registran en Zoho y se auditan en Sanity.
 
+Incluye además un **panel administrativo** (`/admin`) con informes de puntos y redenciones y la
+gestión de quién accede a él (§5.b).
+
 - **Repositorio:** `git@github.com:Geniorama/app-mi-premio.git`
-- **Rama principal:** `main`
+- **Repositorio del Studio:** `git@github.com:Geniorama/studio-mi-premio-cms.git` (esquema de
+  Sanity; se despliega aparte — ver §7)
+- **Rama principal:** `main` (rama de integración; `develop` quedó en desuso y está por detrás)
 - **Dominio de producción:** `https://mipremiogermanmoraleshoteles.com`
+- **Studio:** `https://mipremio.sanity.studio/`
+- **Manual para el usuario del panel:** `MANUAL-USUARIO.md` (sin tecnicismos, para el equipo)
 - **Última actualización de este documento:** 4 de agosto de 2026
 
 ---
@@ -74,10 +81,22 @@ src/
 │   │   ├── [slug]/               # páginas legales (SSG)
 │   │   └── (protected-routes)/   # perfil, extractos, gracias
 │   ├── auth/login|logout/        # login sin Header/Footer
+│   ├── admin/                    # panel administrativo (ver §5.b)
+│   │   ├── login/                # acceso al panel
+│   │   ├── informes/[seccion]/   # una ruta por sección de informes
+│   │   └── usuarios/             # gestión de administradores
 │   └── api/                      # route handlers (ver §5)
-├── components/                   # piezas reutilizables (Header, Footer, Hero, …)
+├── components/
+│   ├── admin/                    # ui.tsx (tabla, tarjetas, paginación) y charts.tsx
+│   └── …                         # piezas del sitio público (Header, Footer, Hero, …)
 ├── views/                        # composición por pantalla (client components)
+│   └── admin/                    # AdminShell, UsuariosView e informes/
 ├── lib/                          # integraciones de servidor (zoho, email, session, auth-codes)
+│   ├── admin.ts                  # control de acceso del panel
+│   ├── admin-roles.ts            # roles y permisos (SIN dependencias de servidor)
+│   ├── zoho-reports.ts           # agregación de los informes
+│   ├── pagination.ts             # paginación en el servidor
+│   └── csv.ts                    # exportación a CSV
 ├── sanity/                       # cliente, queries GROQ, tipos, SEO, imágenes
 ├── utils/                        # Button, Container, constantes de WhatsApp
 └── middleware.ts                 # protección de rutas
@@ -89,6 +108,9 @@ src/
 - `views/*` — Client Components (`"use client"`). Reciben el contenido por props y consultan las
   APIs internas para los datos vivos del usuario.
 - `lib/*` — solo servidor. Nunca importar desde un Client Component.
+  - **Excepción:** `lib/admin-roles.ts` no tiene dependencias de servidor precisamente para poder
+    compartirse con el cliente. Importar `lib/admin.ts` desde un Client Component arrastraría
+    `next/headers` y el cliente de Sanity al bundle del navegador.
 - Alias de importación: `@/*` → `./src/*`.
 
 ---
@@ -669,7 +691,8 @@ un `vercel.json`:
 
 Todo el diagnóstico es por `console.log`/`console.error` con prefijos consistentes:
 `[Zoho]`, `[ZeptoMail]`, `[auth-codes]`, `[send-code]`, `[/api/redemptions]`,
-`[cron/sync-redemptions]`. No hay APM ni agregador de errores.
+`[cron/sync-redemptions]` y, en el panel, `[admin]`, `[admin/send-code]`, `[admin/users]`,
+`[zoho-reports]`. No hay APM ni agregador de errores.
 
 Señales a vigilar en los logs:
 
@@ -681,10 +704,16 @@ Señales a vigilar en los logs:
   de Zoho; hay que ampliar el mapeo.
 - `[auth-codes] No hay código para …` recurrente → indicio del problema de memoria compartida
   entre instancias (§4).
+- `[admin] N documentos adminUser con el correo …` → dos administradores con el mismo correo; el
+  panel concede el de menor privilegio hasta que se resuelva.
+- `[admin/users] X creó a Y con rol Z` → rastro de altas y cambios de rol del panel. Es el único
+  registro de quién dio acceso a quién.
+- `[zoho-reports] … se alcanzó el tope de páginas` → el módulo creció por encima de 8.000
+  registros y el informe puede estar incompleto.
 
-> ⚠️ Varios logs incluyen datos sensibles: `[auth-codes] Código no coincide. Esperado: …` imprime
-> el código de acceso válido en claro, y el modo `debug` de `send-code` imprime datos del
-> contacto. Conviene reducirlos antes de exponer los logs a terceros.
+> ⚠️ El modo `debug` de `send-code` imprime datos del contacto. Conviene reducirlo antes de
+> exponer los logs a terceros. (El log que imprimía el código de acceso en claro se eliminó al
+> introducir el panel.)
 
 ---
 
