@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { verifySessionToken, SESSION_COOKIE } from "@/lib/session";
+import { getViewer } from "@/lib/viewer";
 import {
   getMembershipByEmail,
   getRedemptionsByEmail,
@@ -8,9 +7,8 @@ import {
 } from "@/lib/zoho";
 
 export async function GET() {
-  const cookieStore = await cookies();
-  const sessionValue = cookieStore.get(SESSION_COOKIE)?.value;
-  const user = sessionValue ? await verifySessionToken(sessionValue) : null;
+  // Lectura: vale la sesión del afiliado o una previsualización del panel
+  const user = await getViewer();
 
   if (!user) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });

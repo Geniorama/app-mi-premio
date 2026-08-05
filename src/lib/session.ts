@@ -12,13 +12,21 @@
 
 const SESSION_COOKIE = "mi-premio-session";
 const ADMIN_SESSION_COOKIE = "mi-premio-admin-session";
+const PREVIEW_COOKIE = "mi-premio-preview";
 
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60; // 7 días
 /** El panel administrativo expira mucho antes que la sesión de afiliado */
 const ADMIN_SESSION_MAX_AGE = 12 * 60 * 60; // 12 horas
+/** La previsualización es una herramienta de soporte, no una sesión: dura poco */
+const PREVIEW_MAX_AGE = 30 * 60; // 30 minutos
 
-/** Ámbito del token: un token de afiliado no sirve para el panel admin */
-type SessionScope = "user" | "admin";
+/**
+ * Ámbito del token. Cada uno sirve solo para lo suyo:
+ * - `user`  — sesión de afiliado, la única que autoriza escrituras
+ * - `admin` — panel administrativo
+ * - `preview` — ver el sitio como un afiliado, **solo lectura**
+ */
+type SessionScope = "user" | "admin" | "preview";
 
 export interface SessionUser {
   email: string;
@@ -220,6 +228,58 @@ export async function verifyAdminSessionToken(
   };
 }
 
+// ------------------------------------------------- previsualización (soporte)
+
+export interface PreviewSession {
+  /** Afiliado que se está viendo */
+  email: string;
+  fullName: string;
+  contactId: string;
+  /** Administrador que inició la previsualización, para la auditoría */
+  adminEmail: string;
+}
+
+/**
+ * Token de previsualización.
+ *
+ * Deliberadamente **no** es una sesión de afiliado: su ámbito es `preview`, así
+ * que `verifySessionToken` lo rechaza. Ninguna ruta de escritura puede
+ * aceptarlo, porque todas resuelven su identidad con una función que solo
+ * entiende el ámbito `user`.
+ */
+export function createPreviewToken(preview: PreviewSession): Promise<string> {
+  return sign({
+    scope: "preview",
+    email: preview.email,
+    fullName: preview.fullName,
+    contactId: preview.contactId,
+    adminEmail: preview.adminEmail,
+    exp: Date.now() + PREVIEW_MAX_AGE * 1000,
+  });
+}
+
+export async function verifyPreviewToken(
+  token: string | undefined
+): Promise<PreviewSession | null> {
+  const payload = await verify(token, "preview");
+  if (!payload) return null;
+
+  const email = typeof payload.email === "string" ? payload.email : "";
+  const adminEmail =
+    typeof payload.adminEmail === "string" ? payload.adminEmail : "";
+  if (!email || !adminEmail) return null;
+
+  return {
+    email,
+    fullName:
+      typeof payload.fullName === "string" && payload.fullName
+        ? payload.fullName
+        : email,
+    contactId: typeof payload.contactId === "string" ? payload.contactId : "",
+    adminEmail,
+  };
+}
+
 /** Opciones compartidas de la cookie de sesión */
 export function sessionCookieOptions(maxAge: number) {
   return {
@@ -236,4 +296,6 @@ export {
   SESSION_MAX_AGE,
   ADMIN_SESSION_COOKIE,
   ADMIN_SESSION_MAX_AGE,
+  PREVIEW_COOKIE,
+  PREVIEW_MAX_AGE,
 };

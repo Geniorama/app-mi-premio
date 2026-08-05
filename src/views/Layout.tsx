@@ -2,6 +2,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import FloatingWhatsApp from "@/components/FloatingWhatsApp";
 import WelcomeVideoModal from "@/components/WelcomeVideoModal";
+import PreviewBanner from "@/components/PreviewBanner";
 import { sanityFetch } from "@/sanity/fetch";
 import { siteSettingsQuery } from "@/sanity/queries";
 import { urlFor } from "@/sanity/image";
@@ -19,6 +20,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
 
   return (
     <div>
+      <PreviewBanner />
       <Header logoUrl={headerLogo} nav={settings?.headerNav} />
       {children}
       <Footer

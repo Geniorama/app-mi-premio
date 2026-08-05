@@ -109,6 +109,23 @@ solo quienes tienen saldo. **Pulsa el encabezado de una columna para ordenar** p
 > por ciclo. El panel las agrupa y te muestra el total consolidado, que es la cifra que el
 > afiliado ve en su perfil.
 
+### Ver el sitio como lo ve un afiliado
+
+El botón **Ver como**, al final de cada fila, abre el sitio tal y como lo ve esa persona: su
+saldo, su historial de puntos y su perfil. Sirve para resolver dudas de soporte sin pedirle
+capturas de pantalla.
+
+Es un **modo de solo lectura**. Mientras estás en él verás una barra naranja arriba indicando de
+quién es la vista, y **no podrás redimir bonos ni cambiar su foto**: los botones desaparecen y,
+si aun así se intentara, el sistema lo rechaza. No hay forma de actuar en nombre del afiliado.
+
+Para volver, pulsa **Salir de la previsualización** en esa barra. Si te olvidas, expira sola a
+los 30 minutos.
+
+> **Queda registrado.** Cada vez que alguien usa **Ver como** se guarda quién miró la cuenta de
+> quién. Es una herramienta de soporte, no de curiosidad: estás accediendo a datos personales de
+> un afiliado.
+
 ### 3.4 Puntos por vencer
 
 Los puntos que caducan pronto, agrupados por cercanía al vencimiento y con el detalle de qué

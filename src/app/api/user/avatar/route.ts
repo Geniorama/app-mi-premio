@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { verifySessionToken, SESSION_COOKIE, type SessionUser } from "@/lib/session";
+import { getViewer, getWritableUser, PREVIEW_WRITE_ERROR } from "@/lib/viewer";
 import { sanityClient } from "@/sanity/client";
 import { sanityWriteClient, assertWriteClient } from "@/sanity/writeClient";
 
@@ -9,17 +8,12 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const avatarQuery = `*[_type == "userProfile" && contactId == $contactId][0]{ avatar }`;
 
-async function getSessionUser(): Promise<SessionUser | null> {
-  const cookieStore = await cookies();
-  const value = cookieStore.get(SESSION_COOKIE)?.value;
-  return value ? verifySessionToken(value) : null;
-}
-
 // Documento por usuario con id determinístico para poder reemplazar la foto.
 const profileDocId = (contactId: string) => `userProfile.${contactId}`;
 
 export async function GET() {
-  const user = await getSessionUser();
+  // Lectura: la previsualización necesita ver la foto del afiliado
+  const user = await getViewer();
   if (!user) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
@@ -49,8 +43,16 @@ export async function POST(request: Request) {
     );
   }
 
-  const user = await getSessionUser();
+  // Escritura: solo el propio afiliado cambia su foto
+  const user = await getWritableUser();
   if (!user) {
+    const viewer = await getViewer();
+    if (viewer?.isPreview) {
+      console.warn(
+        `[/api/user/avatar] Intento de subida en previsualización: ${viewer.previewedBy} sobre ${viewer.email}`
+      );
+      return NextResponse.json({ error: PREVIEW_WRITE_ERROR }, { status: 403 });
+    }
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
 

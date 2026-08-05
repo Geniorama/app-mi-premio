@@ -77,12 +77,18 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
     message: string;
   } | null>(null);
 
+  // Un administrador en modo previsualización ve la ficha del bono, pero no
+  // puede redimir en nombre del afiliado. El servidor lo rechaza igualmente;
+  // esto evita ofrecer un botón que siempre fallaría.
+  const [isPreview, setIsPreview] = useState(false);
+
   useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         setUser(data?.user ?? null);
         setIsLoggedIn(!!data?.user);
+        setIsPreview(Boolean(data?.preview));
       });
   }, []);
 
@@ -114,6 +120,7 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
 
   const canRedeem =
     isLoggedIn === true &&
+    !isPreview &&
     aceptaTerminos &&
     aceptaPoliticas &&
     !redeeming &&
@@ -365,7 +372,11 @@ export default function VoucherDetailView({ voucher }: { voucher: Voucher }) {
                 disabled={!canRedeem}
                 className="sm:w-[160px] h-18 disabled:opacity-50 disabled:cursor-not-allowed lg:min-w-[200px]"
               >
-                {redeeming ? "Procesando..." : "Redimir"}
+                {redeeming
+                  ? "Procesando..."
+                  : isPreview
+                    ? "Solo lectura"
+                    : "Redimir"}
               </Button>
             )}
           </div>

@@ -181,9 +181,11 @@ corre en el runtime Edge, así que todas las funciones son asíncronas.
 |---|---|---|---|
 | `mi-premio-session` | `user` | 7 días | `{ email, fullName, contactId }` |
 | `mi-premio-admin-session` | `admin` | 12 horas | `{ email, fullName, adminId, role }` |
+| `mi-premio-preview` | `preview` | 30 minutos | `{ email, fullName, contactId, adminEmail }` |
 
-Ambas son `httpOnly`, `sameSite: lax` y `secure` en producción. El campo `scope` del payload
-impide que un token de afiliado sirva en el panel administrativo y viceversa.
+Todas son `httpOnly`, `sameSite: lax` y `secure` en producción. El campo `scope` del payload
+impide que un token sirva fuera de su área: uno de afiliado no abre el panel, y el de
+previsualización **no autoriza ninguna escritura** (ver §5.b).
 
 El secreto sale de `SESSION_SECRET` (respaldo: `CRON_SECRET`). **Si no hay ninguno, la firma
 lanza excepción**: es un fallo ruidoso a propósito, no un modo degradado que acepte cualquier
@@ -413,6 +415,37 @@ que un duplicado choca a nivel de documento y no solo en la comprobación previa
 
 > **No hay borrado**, solo desactivación: revoca el acceso igual de rápido, es reversible y
 > conserva el rastro de quién tuvo acceso. Para eliminar de verdad está el Studio.
+
+### Modo previsualización — ver el sitio como un afiliado
+
+Desde el informe de Afiliados, el botón **Ver como** abre el área de afiliados tal y como la ve
+esa persona: su saldo, su historial y su perfil. Es una herramienta de soporte, **de solo
+lectura**.
+
+`POST /api/admin/preview` valida al administrador, comprueba que el correo exista como contacto
+en Zoho y emite la cookie `mi-premio-preview`. `DELETE` la limpia (no exige sesión de admin:
+siempre debe poder salirse).
+
+**Cómo se garantiza que no pueda escribir.** No basta con ocultar botones. `src/lib/viewer.ts`
+expone dos funciones deliberadamente separadas:
+
+| Función | Devuelve | La usan |
+|---|---|---|
+| `getViewer()` | sesión real **o** previsualización | rutas de lectura: `auth/me`, `user/membership`, `GET user/avatar` |
+| `getWritableUser()` | **solo** la sesión real de afiliado | rutas de escritura: `POST /api/redemptions`, `POST /api/user/avatar` |
+
+La garantía es estructural, no una comprobación que haya que recordar: una ruta de escritura no
+puede recibir una identidad de previsualización porque la función que llama nunca la devuelve.
+Si aparece una previsualización, responde **403** y lo deja registrado en el log.
+
+> **Al añadir una ruta que escriba en nombre del afiliado, usa `getWritableUser()`.** Si usas
+> `getViewer()` estarás permitiendo que un administrador actúe suplantando a un afiliado.
+
+El middleware deja pasar la previsualización a las rutas protegidas —corre en Edge y solo valida
+la firma—, y `PreviewBanner` muestra un aviso fijo con el nombre del afiliado y la salida. Ese
+aviso es señalización: el bloqueo real está en el servidor.
+
+Cada inicio de previsualización se registra: `[admin/preview] <admin> previsualiza a <afiliado>`.
 
 ### Informes — `/api/admin/reports/*`
 

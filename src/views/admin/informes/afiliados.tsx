@@ -63,6 +63,33 @@ export default function AfiliadosSection() {
 
   useSyncedPage(pagination.sync, data?.pagination?.page);
 
+  const [previewing, setPreviewing] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  /** Abre el área de afiliados vista como esa persona, en solo lectura. */
+  const startPreview = async (email: string) => {
+    setPreviewing(email);
+    setPreviewError(null);
+    try {
+      const response = await fetch("/api/admin/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setPreviewError(result?.error ?? "No se pudo abrir la previsualización");
+        return;
+      }
+      window.location.href = result.redirect ?? "/perfil";
+    } catch {
+      setPreviewError("Error de conexión. Intenta de nuevo.");
+    } finally {
+      setPreviewing(null);
+    }
+  };
+
   // Reordenar cambia qué filas caen en cada página, así que vuelve al inicio
   const handleSort = (key: string) => {
     reset();
@@ -138,6 +165,24 @@ export default function AfiliadosSection() {
       header: "Última redención",
       render: (row) => formatDate(row.ultimaRedencion),
     },
+    {
+      key: "preview",
+      header: "",
+      render: (row) =>
+        row.email ? (
+          <button
+            type="button"
+            disabled={previewing === row.email}
+            onClick={() => startPreview(row.email)}
+            title={`Ver el sitio como ${row.nombre || row.email} (solo lectura)`}
+            className="cursor-pointer whitespace-nowrap rounded-lg border border-black/15 px-3 py-1.5 text-xs font-medium transition-colors hover:border-custom-green hover:text-custom-green disabled:opacity-50"
+          >
+            {previewing === row.email ? "Abriendo…" : "Ver como"}
+          </button>
+        ) : (
+          <span className="text-xs text-[#898781]">Sin correo</span>
+        ),
+    },
   ];
 
   return (
@@ -189,6 +234,7 @@ export default function AfiliadosSection() {
       </Panel>
 
       {error && <ErrorNote message={error} />}
+      {previewError && <ErrorNote message={previewError} />}
       {loading && !data && <Spinner />}
 
       {data && (

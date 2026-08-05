@@ -3,8 +3,10 @@ import type { NextRequest } from "next/server";
 import {
   SESSION_COOKIE,
   ADMIN_SESSION_COOKIE,
+  PREVIEW_COOKIE,
   verifySessionToken,
   verifyAdminSessionToken,
+  verifyPreviewToken,
 } from "@/lib/session";
 
 const PROTECTED_PATHS = ["/perfil", "/extractos", "/gracias"];
@@ -49,13 +51,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/perfil", request.url));
   }
 
-  // Rutas protegidas sin sesión → redirigir al login
+  // Rutas protegidas sin sesión → redirigir al login.
+  // Una previsualización activa también da paso: es un administrador viendo
+  // el área de afiliados en modo solo lectura (el bloqueo de escrituras vive
+  // en los route handlers, no aquí).
   const isProtected = PROTECTED_PATHS.some((path) =>
     matchesPath(pathname, path)
   );
 
   if (isProtected && !user) {
-    return NextResponse.redirect(new URL("/auth/login", request.url));
+    const preview = await verifyPreviewToken(
+      request.cookies.get(PREVIEW_COOKIE)?.value
+    );
+    if (!preview) {
+      return NextResponse.redirect(new URL("/auth/login", request.url));
+    }
   }
 
   return NextResponse.next();

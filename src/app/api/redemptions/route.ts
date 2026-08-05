@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { verifySessionToken, SESSION_COOKIE } from "@/lib/session";
+import { getWritableUser, getViewer, PREVIEW_WRITE_ERROR } from "@/lib/viewer";
 import { getMembershipByEmail, createRedemptionInZoho } from "@/lib/zoho";
 import {
   sendRedemptionAdminEmail,
@@ -27,10 +26,18 @@ export async function POST(request: Request) {
     );
   }
 
-  const cookieStore = await cookies();
-  const sessionValue = cookieStore.get(SESSION_COOKIE)?.value;
-  const user = sessionValue ? await verifySessionToken(sessionValue) : null;
+  // Escritura: SOLO la sesión real del afiliado. `getWritableUser` no entiende
+  // el token de previsualización, así que un administrador viendo el sitio
+  // como alguien no puede redimir sus puntos.
+  const user = await getWritableUser();
   if (!user) {
+    const viewer = await getViewer();
+    if (viewer?.isPreview) {
+      console.warn(
+        `[/api/redemptions] Intento de redención en previsualización: ${viewer.previewedBy} sobre ${viewer.email}`
+      );
+      return NextResponse.json({ error: PREVIEW_WRITE_ERROR }, { status: 403 });
+    }
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
 

@@ -85,6 +85,7 @@ export default function PerfilAfiliadoView({
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
+  const [isPreview, setIsPreview] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -93,6 +94,8 @@ export default function PerfilAfiliadoView({
       fetch("/api/user/avatar").then((r) => (r.ok ? r.json() : null)),
     ]).then(([meData, membershipData, avatarData]) => {
       if (meData?.user) setUser(meData.user);
+      // En previsualización la foto se ve, pero no se puede cambiar
+      setIsPreview(Boolean(meData?.preview));
       if (membershipData?.membership) setMembership(membershipData.membership);
       if (membershipData?.contact) setContact(membershipData.contact);
       if (membershipData?.puntosAcumulados)
@@ -323,15 +326,17 @@ export default function PerfilAfiliadoView({
                            onChange={handleAvatarChange}
                            className="hidden"
                          />
-                         <button
-                           type="button"
-                           onClick={() => fileInputRef.current?.click()}
-                           disabled={uploading}
-                           className="absolute bottom-3 right-3 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-custom-green text-white text-sm font-medium shadow-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                         >
-                           <FiCamera size={16} />
-                           {avatar ? "Cambiar foto" : "Subir foto"}
-                         </button>
+                         {!isPreview && (
+                           <button
+                             type="button"
+                             onClick={() => fileInputRef.current?.click()}
+                             disabled={uploading}
+                             className="absolute bottom-3 right-3 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-custom-green text-white text-sm font-medium shadow-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                           >
+                             <FiCamera size={16} />
+                             {avatar ? "Cambiar foto" : "Subir foto"}
+                           </button>
+                         )}
                        </div>
                        {avatarError && (
                          <p className="mt-3 text-sm text-red-600 text-center">

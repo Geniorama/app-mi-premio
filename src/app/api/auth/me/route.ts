@@ -1,20 +1,19 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { verifySessionToken, SESSION_COOKIE } from "@/lib/session";
+import { getViewer } from "@/lib/viewer";
 
 export async function GET() {
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get(SESSION_COOKIE)?.value;
+  const viewer = await getViewer();
 
-  if (!sessionCookie) {
+  if (!viewer) {
     return NextResponse.json({ user: null }, { status: 401 });
   }
 
-  const user = await verifySessionToken(sessionCookie);
+  const { isPreview, previewedBy, ...user } = viewer;
 
-  if (!user) {
-    return NextResponse.json({ user: null }, { status: 401 });
-  }
-
-  return NextResponse.json({ user });
+  // `preview` alimenta el aviso de solo lectura y desactiva las acciones en
+  // la interfaz. El bloqueo real vive en el servidor, no aquí.
+  return NextResponse.json({
+    user,
+    preview: isPreview ? { previewedBy } : null,
+  });
 }
