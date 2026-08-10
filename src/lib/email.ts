@@ -36,6 +36,17 @@ function resolveAppUrl(baseUrl?: string): string {
   ).replace(/\/$/, "");
 }
 
+/** Formatea un valor en pesos colombianos: 50000 → "$ 50.000" */
+function formatCOP(value: number): string {
+  return `$ ${Math.round(value).toLocaleString("es-CO")}`;
+}
+
+/** Fila de tabla que solo se pinta si hay valor */
+function emailRow(label: string, value?: string | null): string {
+  if (!value) return "";
+  return `<tr><td style="color: #666;">${label}</td><td><strong>${value}</strong></td></tr>`;
+}
+
 function buildEmailHeader(appUrl: string): string {
   const miPremioLogo = `${appUrl}/logo-mi-premio.png`;
   return `
@@ -146,21 +157,31 @@ export async function sendLoginCodeEmail(
 interface RedemptionUserEmailParams {
   to: string;
   fullName: string;
+  company?: string | null;
   voucherTitle: string;
   points: number;
+  /** Valor comercial del bono en COP (priceCOP del voucher en Sanity) */
+  voucherValueCOP?: number | null;
   baseUrl?: string;
 }
 
 export async function sendRedemptionUserEmail({
   to,
   fullName,
+  company,
   voucherTitle,
   points,
+  voucherValueCOP,
   baseUrl,
 }: RedemptionUserEmailParams): Promise<SendEmailResult> {
   const subject = "Tu recompensa está en camino - Mi Premio";
   const appUrl = resolveAppUrl(baseUrl);
   const formattedPoints = points.toLocaleString("es-CO");
+  const companyDisplay = company?.trim() || null;
+  const formattedValue =
+    typeof voucherValueCOP === "number" && voucherValueCOP > 0
+      ? formatCOP(voucherValueCOP)
+      : null;
   const htmlBody = `
     <div style="font-family: sans-serif; max-width: 560px; margin: 0 auto; color: #333;">
       ${buildEmailHeader(appUrl)}
@@ -169,14 +190,10 @@ export async function sendRedemptionUserEmail({
 
       <h3 style="color: #417D30; margin-top: 24px;">Detalles de tu redención</h3>
       <table role="presentation" cellpadding="8" cellspacing="0" style="border-collapse: collapse; margin: 8px 0 16px 0;">
-        <tr>
-          <td style="color: #666;">Bono solicitado:</td>
-          <td><strong>${voucherTitle}</strong></td>
-        </tr>
-        <tr>
-          <td style="color: #666;">Puntos utilizados:</td>
-          <td><strong>${formattedPoints}</strong></td>
-        </tr>
+        ${emailRow("Bono solicitado:", voucherTitle)}
+        ${emailRow("Valor del bono:", formattedValue)}
+        ${emailRow("Puntos utilizados:", formattedPoints)}
+        ${emailRow("Empresa:", companyDisplay)}
       </table>
 
       <p>Estamos trabajando para que disfrutes de tu beneficio lo antes posible. Recibirás un segundo correo electrónico con tu bono digital en un plazo máximo de <strong>10 días hábiles</strong>.</p>
@@ -207,9 +224,14 @@ export async function sendRedemptionUserEmail({
 interface RedemptionAdminEmailParams {
   userFullName: string;
   userEmail: string;
+  /** Empresa a la que pertenece el afiliado (Empresa_Membresia / Account_Name) */
+  company?: string | null;
+  /** Categoría/segmento de la membresía (campo Categor_a) */
   segment?: string | null;
   voucherTitle: string;
   points: number;
+  /** Valor comercial del bono en COP (priceCOP del voucher en Sanity) */
+  voucherValueCOP?: number | null;
   requestDate?: Date;
   baseUrl?: string;
   adminTo?: string;
@@ -218,9 +240,11 @@ interface RedemptionAdminEmailParams {
 export async function sendRedemptionAdminEmail({
   userFullName,
   userEmail,
+  company,
   segment,
   voucherTitle,
   points,
+  voucherValueCOP,
   requestDate,
   baseUrl,
   adminTo,
@@ -233,7 +257,12 @@ export async function sendRedemptionAdminEmail({
     dateStyle: "long",
     timeStyle: "short",
   });
-  const segmentDisplay = segment?.trim() ? segment : "No especificado";
+  const companyDisplay = company?.trim() || "No especificada";
+  const segmentDisplay = segment?.trim() || null;
+  const formattedValue =
+    typeof voucherValueCOP === "number" && voucherValueCOP > 0
+      ? formatCOP(voucherValueCOP)
+      : "No configurado en el bono";
 
   const htmlBody = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
@@ -244,13 +273,15 @@ export async function sendRedemptionAdminEmail({
       <h3 style="color: #417D30; margin-top: 24px;">Información del Usuario</h3>
       <table role="presentation" cellpadding="6" cellspacing="0" style="border-collapse: collapse;">
         <tr><td style="color: #666;">Nombre:</td><td><strong>${userFullName}</strong></td></tr>
-        <tr><td style="color: #666;">Empresa/Segmento:</td><td>${segmentDisplay}</td></tr>
+        <tr><td style="color: #666;">Empresa:</td><td><strong>${companyDisplay}</strong></td></tr>
+        ${emailRow("Segmento:", segmentDisplay)}
         <tr><td style="color: #666;">Correo electrónico:</td><td><a href="mailto:${userEmail}">${userEmail}</a></td></tr>
       </table>
 
       <h3 style="color: #417D30; margin-top: 24px;">Información de la Redención</h3>
       <table role="presentation" cellpadding="6" cellspacing="0" style="border-collapse: collapse;">
         <tr><td style="color: #666;">Premio:</td><td><strong>${voucherTitle}</strong></td></tr>
+        <tr><td style="color: #666;">Valor del bono:</td><td><strong>${formattedValue}</strong></td></tr>
         <tr><td style="color: #666;">Puntos redimidos:</td><td><strong>${formattedPoints}</strong></td></tr>
         <tr><td style="color: #666;">Fecha de solicitud:</td><td>${fecha}</td></tr>
       </table>

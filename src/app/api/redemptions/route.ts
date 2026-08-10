@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getWritableUser, getViewer, PREVIEW_WRITE_ERROR } from "@/lib/viewer";
-import { getMembershipByEmail, createRedemptionInZoho } from "@/lib/zoho";
+import {
+  getMembershipByEmail,
+  createRedemptionInZoho,
+  searchContactByEmail,
+} from "@/lib/zoho";
 import {
   sendRedemptionAdminEmail,
   sendRedemptionUserEmail,
@@ -185,12 +189,30 @@ export async function POST(request: Request) {
   }
 
   // 6. Notificaciones por email (no bloqueantes)
+  //    La empresa vive en el lookup Empresa_Membresia; si la membresía no lo
+  //    trae, se cae al Account_Name del contacto en Zoho.
+  let company = membership.Empresa_Membresia?.name?.trim() || null;
+  if (!company) {
+    try {
+      const contact = await searchContactByEmail(user.email);
+      company = contact?.Account_Name?.name?.trim() || null;
+    } catch (err) {
+      console.error(
+        "[/api/redemptions] No se pudo resolver la empresa del contacto:",
+        err
+      );
+    }
+  }
+  const voucherValueCOP = voucher.priceCOP ?? null;
+
   const recipientEmail = deliveryEmail?.trim() || user.email;
   const userEmailResult = await sendRedemptionUserEmail({
     to: recipientEmail,
     fullName: user.fullName,
+    company,
     voucherTitle: voucher.title,
     points,
+    voucherValueCOP,
   });
   if (!userEmailResult.success) {
     console.error(
@@ -202,9 +224,11 @@ export async function POST(request: Request) {
   const adminEmailResult = await sendRedemptionAdminEmail({
     userFullName: user.fullName,
     userEmail: user.email,
+    company,
     segment: membership.Categor_a ?? null,
     voucherTitle: voucher.title,
     points,
+    voucherValueCOP,
     requestDate: zohoRecord.createdTime
       ? new Date(zohoRecord.createdTime)
       : new Date(),

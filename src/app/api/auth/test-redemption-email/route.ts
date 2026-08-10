@@ -33,7 +33,11 @@ export async function POST(request: Request) {
     const points = Number.isFinite(Number(body?.points))
       ? Number(body.points)
       : 5000;
-    const segment = body?.segment?.trim() || "Empresa de Prueba";
+    const company = body?.company?.trim() || "Empresa de Prueba S.A.S.";
+    const segment = body?.segment?.trim() || "Segmento de Prueba";
+    const voucherValueCOP = Number.isFinite(Number(body?.voucherValueCOP))
+      ? Number(body.voucherValueCOP)
+      : 50000;
     const target = (body?.target as string | undefined)?.trim() || "both";
     const baseUrl = body?.baseUrl?.trim();
 
@@ -50,8 +54,10 @@ export async function POST(request: Request) {
       results.user = await sendRedemptionUserEmail({
         to: email,
         fullName,
+        company,
         voucherTitle,
         points,
+        voucherValueCOP,
         baseUrl,
       });
     }
@@ -60,9 +66,11 @@ export async function POST(request: Request) {
       results.admin = await sendRedemptionAdminEmail({
         userFullName: fullName,
         userEmail: email,
+        company,
         segment,
         voucherTitle,
         points,
+        voucherValueCOP,
         baseUrl,
         adminTo: adminEmail,
       });

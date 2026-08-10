@@ -166,6 +166,8 @@ export interface ZohoMembership {
   }> | null;
   /** Ajustar al nombre API real del campo de categoría */
   Categor_a?: string;
+  /** Lookup a la empresa (Accounts) dueña de la membresía */
+  Empresa_Membresia?: { name: string; id: string } | null;
   Created_Time?: string;
   /** Subformulario Puntos Membresía */
   Puntos_Membresia?: ZohoPuntoMembresia[];
@@ -345,6 +347,7 @@ export async function getMembershipByEmail(
     Correo_electr_nico_1: child.Correo_electr_nico_1,
     Saldo_Puntos_Disponibles: saldoGlobal,
     Categor_a: parent.Categor_a ?? child.Categor_a,
+    Empresa_Membresia: parent.Empresa_Membresia ?? child.Empresa_Membresia,
     Membresia_Padre: { name: parent.Name ?? "", id: parent.id },
     Puntos_Membresia: puntosConsolidados,
     redFifo,
