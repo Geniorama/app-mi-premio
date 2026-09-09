@@ -6,6 +6,11 @@ import { sanityFreshClient } from "@/sanity/client";
 import { redemptionsAuditQuery } from "@/sanity/queries";
 import { toCsv, csvResponse, formatDateTimeForCsv } from "@/lib/csv";
 import { parsePagination, paginate } from "@/lib/pagination";
+import { pointsToCop } from "@/lib/points";
+import {
+  groupRedemptions,
+  type RedemptionReportRow,
+} from "@/lib/redemption-groups";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -15,33 +20,13 @@ interface AuditDoc {
   voucherTitle?: string;
   voucherSlug?: string;
   voucherCategory?: string;
+  voucherPoints?: number;
   status?: string;
   deliveryEmail?: string;
   deliveryCode?: string;
   processedAt?: string;
   redeemedAt?: string;
   email?: string;
-}
-
-interface RedemptionReportRow {
-  id: string;
-  nombre: string;
-  afiliado: string;
-  email: string;
-  membresia: string;
-  puntos: number;
-  estado: string;
-  estadoRaw: string;
-  fecha: string | null;
-  /** Datos que solo existen en la auditoría de Sanity */
-  bono: string;
-  bonoSlug: string;
-  categoria: string;
-  estadoEntrega: string;
-  correoEntrega: string;
-  procesadaEn: string | null;
-  /** true si la redención se originó en la web (existe en Sanity) */
-  origenWeb: boolean;
 }
 
 export async function GET(request: NextRequest) {
@@ -75,16 +60,25 @@ export async function GET(request: NextRequest) {
 
       return {
         id: redemption.id,
+        ids: [redemption.id],
         nombre: redemption.nombre,
+        nombres: [redemption.nombre],
+        tramos: 1,
         afiliado: redemption.afiliado,
         email: redemption.email,
+        rootId: redemption.rootId,
+        membresiaId: redemption.membresiaId,
+        membresiaIds: [redemption.membresiaId],
         membresia: redemption.membresiaNombre,
+        membresias: [redemption.membresiaNombre],
         puntos: redemption.puntos,
         estado: redemption.estado,
         estadoRaw: redemption.estadoRaw,
+        estadoMixto: false,
         fecha: redemption.fecha,
         bono: doc?.voucherTitle ?? "",
         bonoSlug: doc?.voucherSlug ?? "",
+        bonoPuntos: doc?.voucherPoints ?? 0,
         categoria: doc?.voucherCategory ?? "",
         estadoEntrega: doc?.status ?? "",
         correoEntrega: doc?.deliveryEmail ?? doc?.email ?? "",
@@ -92,6 +86,12 @@ export async function GET(request: NextRequest) {
         origenWeb: Boolean(doc),
       };
     });
+
+    // Un bono = una fila, aunque Zoho lo haya partido en varios registros.
+    // Se agrupa antes de filtrar para que el resumen y la paginación cuenten
+    // bonos, no tramos.
+    rows = groupRedemptions(rows);
+    rows.sort((a, b) => (b.fecha ?? "").localeCompare(a.fecha ?? ""));
 
     // -------------------------------------------------------------- filtros
     const from = params.get("from");
@@ -128,6 +128,14 @@ export async function GET(request: NextRequest) {
         { key: "email", header: "Correo", value: (r) => r.email },
         { key: "membresia", header: "Membresía", value: (r) => r.membresia },
         { key: "puntos", header: "Puntos", value: (r) => r.puntos },
+        // Sin símbolo ni separadores: así Excel lo trata como número
+        { key: "valorCOP", header: "Valor (COP)", value: (r) => pointsToCop(r.puntos) },
+        { key: "tramos", header: "Registros en Zoho", value: (r) => r.tramos },
+        {
+          key: "nombres",
+          header: "Redenciones en Zoho",
+          value: (r) => r.nombres.join(" | "),
+        },
         { key: "estadoRaw", header: "Estado en Zoho", value: (r) => r.estadoRaw },
         { key: "bono", header: "Bono", value: (r) => r.bono },
         { key: "categoria", header: "Categoría", value: (r) => r.categoria },
@@ -154,6 +162,10 @@ export async function GET(request: NextRequest) {
       puntos: totalPuntos,
       porEstado,
       desdeWeb: rows.filter((row) => row.origenWeb).length,
+      valorCOP: pointsToCop(totalPuntos),
+      // Cuántos registros hay realmente en Zoho detrás de esas redenciones,
+      // para poder cuadrar el informe con el CRM.
+      registrosZoho: rows.reduce((total, row) => total + row.tramos, 0),
     };
 
     const { rows: pageRows, pagination } = paginate(rows, parsePagination(params));

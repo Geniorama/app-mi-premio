@@ -8,9 +8,13 @@ import {
   Spinner,
   ErrorNote,
   formatNumber,
+  formatCurrency,
+  formatPointsAsCop,
+  MoneyCell,
   formatDateTime,
 } from "@/components/admin/ui";
 import { ColumnChart } from "@/components/admin/charts";
+import { COP_PER_POINT } from "@/lib/points";
 import {
   useRefreshToken,
   useReport,
@@ -41,6 +45,8 @@ export default function ResumenSection() {
       label: short,
       fullLabel: full,
       value: point.puntos,
+      display: formatPointsAsCop(point.puntos),
+      valueHint: `${formatNumber(point.puntos)} puntos`,
       secondary: point.redenciones,
       secondaryLabel: point.redenciones === 1 ? "redención" : "redenciones",
     };
@@ -50,33 +56,43 @@ export default function ResumenSection() {
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
-          label="Puntos entregados"
+          label="Entregado"
           value={totals.puntosEntregados}
+          money
           hint="Acumulado histórico del programa"
         />
         <StatTile
-          label="Puntos redimidos"
+          label="Redimido"
           value={totals.puntosRedimidos}
-          hint={`${formatNumber(totals.redenciones)} redenciones`}
+          money
+          hint={`En ${formatNumber(totals.redenciones)} redenciones`}
           tone="accent"
         />
         <StatTile
           label="Saldo en circulación"
           value={totals.saldoDisponible}
+          money
           hint={`${formatNumber(totals.afiliadosConSaldo)} afiliados con saldo`}
         />
         <StatTile
-          label="Puntos vencidos"
+          label="Vencido"
           value={totals.puntosVencidos}
+          money
           hint="Ya no son redimibles"
           tone="critical"
         />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Afiliados" value={totals.afiliados} hint="Redes de membresía" />
+        <StatTile
+          label="Afiliados"
+          value={totals.afiliados}
+          hint={`${formatNumber(
+            totals.afiliadosConMembresia
+          )} con membresía · ${formatNumber(totals.afiliadosSinMembresia)} sin`}
+        />
         <StatTile label="Membresías" value={totals.membresias} hint="Padre + ciclos hija" />
-        <StatTile label="Puntos por vencer" value={totals.puntosPorVencer} />
+        <StatTile label="Por vencer" value={totals.puntosPorVencer} money />
         <StatTile
           label="Redenciones desde la web"
           value={`${formatNumber(data.cobertura.redencionesAuditadas)} / ${formatNumber(data.cobertura.redencionesZoho)}`}
@@ -85,10 +101,10 @@ export default function ResumenSection() {
       </div>
 
       <Panel
-        title="Puntos redimidos por mes"
+        title="Valor redimido por mes"
         description="Últimos 12 meses. Pasa el cursor sobre una columna para ver el detalle."
       >
-        <ColumnChart points={puntos} valueLabel="puntos redimidos" />
+        <ColumnChart points={puntos} valueLabel="redimidos" />
       </Panel>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
@@ -112,11 +128,12 @@ export default function ResumenSection() {
                 render: ([, cantidad]) => formatNumber(cantidad),
               },
               {
-                key: "puntos",
-                header: "Puntos",
+                key: "valor",
+                header: "Valor",
                 numeric: true,
-                render: ([estado]) =>
-                  formatNumber(totals.puntosPorEstado[estado] ?? 0),
+                render: ([estado]) => (
+                  <MoneyCell points={totals.puntosPorEstado[estado] ?? 0} />
+                ),
               },
             ]}
           />
@@ -139,10 +156,10 @@ export default function ResumenSection() {
                 render: (row) => formatNumber(row.canjes),
               },
               {
-                key: "puntos",
-                header: "Puntos",
+                key: "valor",
+                header: "Valor",
                 numeric: true,
-                render: (row) => formatNumber(row.puntos),
+                render: (row) => <MoneyCell points={row.puntos} />,
               },
             ]}
           />
@@ -175,17 +192,21 @@ export default function ResumenSection() {
               render: (row) => formatNumber(row.redenciones),
             },
             {
-              key: "puntos",
-              header: "Puntos redimidos",
+              key: "valor",
+              header: "Redimido",
               numeric: true,
-              render: (row) => formatNumber(row.puntosRedimidos),
+              render: (row) => (
+                <MoneyCell points={row.puntosRedimidos} tone="accent" />
+              ),
             },
           ]}
         />
       </Panel>
 
       <p className="text-xs text-[#898781]">
-        Informe generado el {formatDateTime(data.generadoEn)}.
+        Los valores en pesos usan la equivalencia del programa: 1 punto ={" "}
+        {formatCurrency(COP_PER_POINT)}. Informe generado el{" "}
+        {formatDateTime(data.generadoEn)}.
       </p>
     </div>
   );

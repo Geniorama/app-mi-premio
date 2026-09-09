@@ -12,6 +12,7 @@
  */
 
 import type { ReactNode } from "react";
+import { pointsToCop } from "@/lib/points";
 
 // -------------------------------------------------------------- formateadores
 
@@ -20,6 +21,17 @@ const numberFormatter = new Intl.NumberFormat("es-CO");
 export function formatNumber(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   return numberFormatter.format(Math.round(value));
+}
+
+/** Pesos colombianos: 50000 → "$ 50.000" */
+export function formatCurrency(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  return `$ ${numberFormatter.format(Math.round(value))}`;
+}
+
+/** Puntos → su equivalente en pesos, ya formateado. */
+export function formatPointsAsCop(points: number | null | undefined): string {
+  return formatCurrency(pointsToCop(points));
 }
 
 export function formatDate(value?: string | null): string {
@@ -48,14 +60,59 @@ export function formatDateTime(value?: string | null): string {
 
 // ------------------------------------------------------------------ stat tile
 
+/**
+ * Celda de una cifra de puntos, con los pesos al frente.
+ *
+ * Quien decide sobre el programa lee en dinero: el peso es la cifra grande y
+ * los puntos quedan debajo como la unidad operativa. Antes era al revés y el
+ * valor en pesos se perdía como texto de pie de nota.
+ */
+export function MoneyCell({
+  points,
+  tone = "default",
+}: {
+  points: number | null | undefined;
+  tone?: "default" | "accent" | "critical";
+}) {
+  const color =
+    tone === "accent"
+      ? "text-custom-green"
+      : tone === "critical"
+        ? "text-[#d03b3b]"
+        : "text-[#0b0b0b]";
+
+  return (
+    <div>
+      <p className={`font-semibold [font-variant-numeric:tabular-nums] ${color}`}>
+        {formatPointsAsCop(points)}
+      </p>
+      <p className="text-xs font-normal text-[#52514e]">
+        {formatNumber(points)} pts
+      </p>
+    </div>
+  );
+}
+
 interface StatTileProps {
   label: string;
   value: number | string;
   hint?: string;
+  /**
+   * El valor son puntos: la tarjeta encabeza con su equivalente en pesos y
+   * deja los puntos como segunda línea.
+   */
+  money?: boolean;
   tone?: "default" | "accent" | "critical";
 }
 
-export function StatTile({ label, value, hint, tone = "default" }: StatTileProps) {
+export function StatTile({
+  label,
+  value,
+  hint,
+  money = false,
+  tone = "default",
+}: StatTileProps) {
+  const showMoney = money && typeof value === "number";
   const valueColor =
     tone === "accent"
       ? "text-custom-green"
@@ -69,8 +126,17 @@ export function StatTile({ label, value, hint, tone = "default" }: StatTileProps
         {label}
       </p>
       <p className={`mt-2 text-3xl font-semibold ${valueColor}`}>
-        {typeof value === "number" ? formatNumber(value) : value}
+        {showMoney
+          ? formatPointsAsCop(value as number)
+          : typeof value === "number"
+            ? formatNumber(value)
+            : value}
       </p>
+      {showMoney && (
+        <p className="mt-1 text-sm font-medium [font-variant-numeric:tabular-nums] text-[#52514e]">
+          {formatNumber(value as number)} puntos
+        </p>
+      )}
       {hint && <p className="mt-1 text-xs text-[#52514e]">{hint}</p>}
     </div>
   );

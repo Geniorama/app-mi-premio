@@ -312,10 +312,77 @@ transacción de Sanity. Respuesta: `{ summary: { checked, updated, unchanged, un
 errors }, unknownValues }`. Con `?debug=1` incluye un registro crudo de Zoho de muestra — útil
 para descubrir nombres API de subformularios desconocidos.
 
-> **Infraestructura pendiente:** el repositorio **no contiene `vercel.json`** ni ninguna
-> definición de cron. La ejecución periódica debe estar configurada fuera del código (cron de
-> Vercel en el dashboard, o un scheduler externo). Documentar la frecuencia real y validarla es
-> un pendiente operativo (ver §9).
+> **Infraestructura pendiente:** el repositorio **no declara ningún cron**. La app corre en AWS
+> sobre un proceso largo (`next start`), así que la ejecución periódica de `sync-redemptions`
+> debe estar configurada fuera del código (EventBridge Scheduler contra la URL pública, o un
+> `crontab` en la máquina). Documentar la frecuencia real y validarla es un pendiente operativo
+> (ver §9). El precalentado de informes, en cambio, **no necesita nada externo**: va dentro del
+> proceso (abajo).
+
+### Precalentado de informes — temporizador en proceso
+
+El informe de lotes —el que sostiene **Puntos**, **Puntos por vencer** y **Hoteles**— recorre
+Zoho membresía por membresía (≈320 GET, unos 7-9 s), porque el subformulario `Puntos_Membresia`
+no llega en el endpoint de lista. Alguien tiene que pagar esa espera; el precalentado la paga en
+frío para que el administrador llegue siempre a una caché caliente.
+
+**Por qué va dentro del proceso y no en un cron externo:** la caché de `zoho-reports` vive en la
+memoria del proceso. Un scheduler que llame por HTTP calienta la réplica que le asigne el
+balanceador, que no tiene por qué ser la que atienda al administrador. El temporizador interno
+calienta siempre su propia memoria, y si mañana hay tres tareas en ECS, cada una calienta la
+suya.
+
+| Pieza | Archivo |
+|---|---|
+| Hook de arranque (Next lo llama solo, una vez por proceso) | `src/instrumentation.ts` |
+| Temporizador y política | `src/lib/reports-warmup.ts` |
+| Las cargas que se fuerzan | `warmReportsCache()` en `src/lib/zoho-reports.ts` |
+
+Ritmo: primera pasada a los ~5-30 s del arranque (el salto aleatorio evita que dos réplicas que
+arrancan juntas golpeen el CRM a la vez) y luego **cada 30 minutos**. El TTL de la caché de lotes
+son 35 minutos, algo más que el intervalo, para que entre dos pasadas nadie encuentre la caché
+caducada. **Si se cambia una de las dos cifras hay que mover la otra** (`INTERVAL_MS` en
+`reports-warmup.ts`, `LOTS_TTL_MS` en `zoho-reports.ts`).
+
+Interruptor: `REPORTS_WARMUP`. Encendido en producción por defecto; `off` lo apaga (útil para un
+contenedor que no sirve el panel) y `on` lo enciende en desarrollo, donde por defecto está
+apagado para no gastar ~330 llamadas a Zoho en cada arranque.
+
+En el log, el arranque deja una línea y cada pasada otra:
+
+```
+[reports-warmup] Activo: primera pasada en 24 s, luego cada 30 min.
+[reports-warmup] (arranque) Caché lista en 8971 ms. points-lots: 9991 en 8971 ms | redemptions: 51 en 1466 ms | affiliate-contacts: 405 en 2651 ms
+```
+
+Una carga que falle no tumba a las demás: se reporta aparte y la línea pasa a `console.error`
+con el prefijo `Caché incompleta`.
+
+> **Coste en Zoho:** cada pasada son ~330 llamadas a la API; cada 30 minutos, unas 16.000 al día
+> por réplica. Antes de acortar el intervalo —o si se levantan varias réplicas— contrastar
+> contra el límite diario de créditos de la cuenta (Setup → API usage en el CRM). Alargar el
+> intervalo a 60 min lo deja en la mitad, a cambio de que la caché caduque entre pasadas si no
+> se sube también `LOTS_TTL_MS`.
+
+### Precalentado a mano — `GET /api/cron/warm-reports`
+
+Auth: header `Authorization: Bearer $CRON_SECRET`, igual que `sync-redemptions`.
+`dynamic = "force-dynamic"`, `maxDuration = 300`.
+
+Hace exactamente lo mismo que el temporizador, pero a petición: sirve para forzar la recarga tras
+un despliegue o al depurar. **No hace falta programarlo**; con el temporizador interno en marcha
+es solo una herramienta de mano.
+
+```json
+{ "ok": true, "ms": 8793,
+  "cargas": [ { "clave": "points-lots", "registros": 9991, "ms": 8793 } ] }
+```
+
+Devuelve **500** si alguna carga falló, para que un scheduler externo —si algún día se usa— lo
+marque como fallido en vez de darlo por bueno.
+
+> Ojo con el balanceador: si hay varias réplicas, esta llamada calienta **solo la que la atienda**.
+> Para el uso normal, el temporizador interno es el que cuenta.
 
 ---
 
@@ -673,6 +740,7 @@ Archivo local: `.env.local` (ignorado por git — el `.gitignore` cubre `.env*`)
 | `CRON_SECRET` | **Sí** | protege el cron y los endpoints de prueba de correo |
 | `SESSION_SECRET` | **Sí** | firma HMAC de las cookies de sesión. Sin él (ni `CRON_SECRET`) el login falla con excepción. Cambiarlo cierra todas las sesiones activas |
 | `DEV_LOGIN_ENABLED` | No | `"true"` habilita `dev-login`. **No definir en producción** |
+| `REPORTS_WARMUP` | No | precalentado de la caché de informes. Encendido en producción por defecto; `off` lo apaga, `on` lo enciende en desarrollo (cuesta ~330 llamadas a Zoho por arranque) |
 
 ---
 
@@ -687,7 +755,7 @@ Sanity.
 
 ### Checklist de despliegue
 
-1. Cargar todas las variables de §8 en el entorno (Vercel u equivalente).
+1. Cargar todas las variables de §8 en el entorno del servicio de AWS que ejecuta la app.
 2. **Definir `SESSION_SECRET`** con un valor aleatorio largo. Sin él (ni `CRON_SECRET`) el login
    falla con excepción, y cambiarlo después cierra todas las sesiones activas.
 3. Verificar que existe al menos un `adminUser` publicado y activo, o nadie podrá entrar a
@@ -696,7 +764,9 @@ Sanity.
 5. Confirmar que el remitente de ZeptoMail está verificado para el dominio.
 6. Registrar el dominio de producción como **CORS origin** en el proyecto de Sanity.
 7. Configurar la ejecución periódica de `GET /api/cron/sync-redemptions` con el header
-   `Authorization: Bearer $CRON_SECRET`.
+   `Authorization: Bearer $CRON_SECRET` (crontab o EventBridge; ver §9). El precalentado de
+   informes no necesita configuración: comprobar en el arranque que el log trae
+   `[reports-warmup] Activo`, y unos segundos después `Caché lista`.
 8. Smoke test afiliado: login con código real → `/perfil` muestra saldo → detalle de bono →
    redención de prueba → correos recibidos → documento `redemption` creado en Sanity.
 9. Smoke test panel: `/admin/login` con un correo `adminUser` → los cuatro informes cargan →
@@ -704,27 +774,36 @@ Sanity.
 
 ### Cron / sincronización
 
-No hay definición de cron en el repositorio. Si el despliegue es en Vercel, la opción natural es
-un `vercel.json`:
+El despliegue es en **AWS sobre un proceso largo** (`next start`), no en Vercel: no hay
+`vercel.json` ni crons de plataforma.
 
-```jsonc
-{
-  "crons": [
-    { "path": "/api/cron/sync-redemptions", "schedule": "0 */6 * * *" }
-  ]
-}
+- **Precalentado de informes:** no requiere nada. Va dentro del proceso (§5, "Precalentado de
+  informes"); arranca solo con el servidor.
+- **Sincronización de redenciones:** sigue necesitando un disparador externo. Dos opciones, según
+  cómo esté montada la máquina:
+
+```bash
+# crontab en la instancia (EC2), cada 6 horas
+0 */6 * * * curl -fsS "https://<dominio>/api/cron/sync-redemptions" \
+  -H "Authorization: Bearer $CRON_SECRET" >/dev/null
 ```
 
-> Nota: los crons de Vercel invocan la ruta con su propio header de autorización; este endpoint
-> exige `Bearer $CRON_SECRET`, que es exactamente el esquema que Vercel envía cuando
-> `CRON_SECRET` está definida como variable de entorno. Validar en el primer despliegue que la
-> invocación no devuelve 401.
+O un **EventBridge Scheduler** con destino HTTP (API destination) apuntando a la misma URL, con
+el header `Authorization: Bearer $CRON_SECRET` guardado como connection secret. En ECS o App
+Runner, donde no hay una máquina fija a la que meterle un `crontab`, EventBridge es la opción
+natural.
+
+> El endpoint no distingue quién lo invoca: cualquier scheduler que mande el header sirve.
+
+> Validar en el primer despliegue que la invocación no devuelve 401: un secreto mal copiado se
+> ve exactamente igual que un cron que nunca corrió.
 
 ### Observabilidad
 
 Todo el diagnóstico es por `console.log`/`console.error` con prefijos consistentes:
 `[Zoho]`, `[ZeptoMail]`, `[auth-codes]`, `[send-code]`, `[/api/redemptions]`,
-`[cron/sync-redemptions]` y, en el panel, `[admin]`, `[admin/send-code]`, `[admin/users]`,
+`[cron/sync-redemptions]`, `[cron/warm-reports]`, `[reports-warmup]` y, en el panel, `[admin]`,
+`[admin/send-code]`, `[admin/users]`,
 `[zoho-reports]`. No hay APM ni agregador de errores.
 
 Señales a vigilar en los logs:
@@ -768,7 +847,7 @@ Ordenados por severidad.
 | 8 | **Esquema de Sanity fuera del repo** | Un cambio en el Studio puede romper queries y tipos sin aviso en CI | Versionar el esquema o generar tipos con `sanity typegen` |
 | 9 | **Sin pruebas automatizadas ni CI** | El único control es `npm run lint` manual | Tests de `mapBitacoraToStatus`, del reparto FIFO y de `getMembershipByEmail` |
 | 10 | **Logo de partner en URL externa** | `PARTNER_LOGO` en `lib/email.ts` apunta a un CDN de LinkedIn que puede caducar | Alojar el logo en `/public` o en Sanity |
-| 11 | **Cron no declarado en el repo** | Si nadie lo configuró, los estados de redención nunca se sincronizan | Añadir `vercel.json` y verificar la ejecución |
+| 11 | **Cron de sincronización no declarado** | El precalentado de informes ya corre dentro del proceso, pero `sync-redemptions` sigue dependiendo de un disparador externo: si nadie lo configuró, los estados de redención nunca se sincronizan | Montar el `crontab` o el EventBridge de §9 y verificar la ejecución |
 
 ---
 
@@ -792,10 +871,14 @@ curl -X POST http://localhost:3000/api/auth/dev-login \
   -d '{"email":"afiliado@ejemplo.com"}' -c cookies.txt
 ```
 
-Probar el cron en local:
+Probar los crons en local:
 
 ```bash
 curl "http://localhost:3000/api/cron/sync-redemptions?debug=1" \
+  -H "Authorization: Bearer $CRON_SECRET"
+
+# Precalentado: devuelve cuánto tardó cada carga. Sin el header, 401.
+curl "http://localhost:3000/api/cron/warm-reports" \
   -H "Authorization: Bearer $CRON_SECRET"
 ```
 

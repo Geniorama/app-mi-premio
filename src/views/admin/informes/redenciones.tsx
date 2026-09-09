@@ -13,6 +13,7 @@ import {
   ErrorNote,
   Pagination,
   formatNumber,
+  MoneyCell,
   formatDate,
   inputClass,
   type Column,
@@ -81,6 +82,14 @@ export default function RedencionesSection() {
           <p className="font-medium text-[#0b0b0b]">{row.nombre}</p>
           <p className="text-xs text-[#52514e]">
             {row.origenWeb ? "Web" : "CRM"}
+            {row.tramos > 1 && (
+              // Un bono puede consumir varias membresías de la red (FIFO):
+              // la fila los une, pero conviene ver que en Zoho son N registros.
+              <span title={row.membresias.join(", ")}>
+                {" · "}
+                {row.tramos} registros en Zoho
+              </span>
+            )}
           </p>
         </div>
       ),
@@ -108,14 +117,23 @@ export default function RedencionesSection() {
     },
     {
       key: "puntos",
-      header: "Puntos",
+      header: "Valor",
       numeric: true,
-      render: (row) => formatNumber(row.puntos),
+      render: (row) => <MoneyCell points={row.puntos} />,
     },
     {
       key: "estado",
       header: "Estado",
-      render: (row) => <StatusPill status={row.estado} />,
+      render: (row) => (
+        <div className="flex flex-col items-start gap-1">
+          <StatusPill status={row.estado} />
+          {row.estadoMixto && (
+            <span className="text-xs text-[#898781]">
+              Estados distintos entre registros
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       key: "entrega",
@@ -199,8 +217,22 @@ export default function RedencionesSection() {
       {data && (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatTile label="Redenciones" value={data.resumen.redenciones} />
-            <StatTile label="Puntos redimidos" value={data.resumen.puntos} tone="accent" />
+            <StatTile
+              label="Redenciones"
+              value={data.resumen.redenciones}
+              hint={
+                data.resumen.registrosZoho > data.resumen.redenciones
+                  ? `${formatNumber(data.resumen.registrosZoho)} registros en Zoho`
+                  : undefined
+              }
+            />
+            <StatTile
+              label="Redimido"
+              value={data.resumen.puntos}
+              money
+              hint="1 punto = $ 10"
+              tone="accent"
+            />
             <StatTile
               label="Originadas en la web"
               value={data.resumen.desdeWeb}

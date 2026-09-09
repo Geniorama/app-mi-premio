@@ -28,7 +28,15 @@ export interface ColumnPoint {
   label: string;
   /** Etiqueta larga para el tooltip */
   fullLabel: string;
+  /** Magnitud de la barra. Siempre en la misma unidad para todo el gráfico. */
   value: number;
+  /**
+   * Texto que sustituye a `value` al escribirlo (p. ej. su valor en pesos).
+   * La barra sigue midiendo `value`; solo cambia lo que se lee.
+   */
+  display?: string;
+  /** Línea extra bajo el valor en el tooltip */
+  valueHint?: string;
   secondary?: number;
   secondaryLabel?: string;
 }
@@ -102,7 +110,7 @@ export function ColumnChart({
                     className="pointer-events-none absolute inset-x-0 text-center text-[11px] font-semibold text-[#0b0b0b]"
                     style={{ bottom: `calc(${height}% + 4px)` }}
                   >
-                    {formatNumber(point.value)}
+                    {point.display ?? formatNumber(point.value)}
                   </span>
                 )}
 
@@ -110,8 +118,11 @@ export function ColumnChart({
                   <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 w-max -translate-x-1/2 rounded-lg border border-black/10 bg-white px-3 py-2 text-xs shadow-lg">
                     <p className="font-semibold text-[#0b0b0b]">{point.fullLabel}</p>
                     <p className="text-[#52514e]">
-                      {formatNumber(point.value)} {valueLabel}
+                      {point.display ?? `${formatNumber(point.value)} ${valueLabel}`}
                     </p>
+                    {point.valueHint && (
+                      <p className="text-[#52514e]">{point.valueHint}</p>
+                    )}
                     {point.secondary !== undefined && (
                       <p className="text-[#52514e]">
                         {formatNumber(point.secondary)} {point.secondaryLabel}
@@ -144,7 +155,10 @@ export function ColumnChart({
 
 export interface OrdinalBar {
   label: string;
+  /** Magnitud de la barra. Siempre en la misma unidad para todo el gráfico. */
   value: number;
+  /** Texto que sustituye a `value` al escribirlo (p. ej. su valor en pesos) */
+  display?: string;
   hint?: string;
   /** Marca la barra con el color de estado crítico (p. ej. ya vencidos) */
   critical?: boolean;
@@ -187,10 +201,12 @@ export function OrdinalBarList({
             <div className="flex items-baseline justify-between gap-3 text-sm">
               <span className="text-[#0b0b0b]">{bar.label}</span>
               <span className="[font-variant-numeric:tabular-nums] font-semibold text-[#0b0b0b]">
-                {formatNumber(bar.value)}{" "}
-                <span className="text-xs font-normal text-[#52514e]">
-                  {valueLabel}
-                </span>
+                {bar.display ?? formatNumber(bar.value)}{" "}
+                {!bar.display && (
+                  <span className="text-xs font-normal text-[#52514e]">
+                    {valueLabel}
+                  </span>
+                )}
               </span>
             </div>
             <div className="mt-1 h-2.5 w-full overflow-hidden rounded-full bg-[#f0efec]">

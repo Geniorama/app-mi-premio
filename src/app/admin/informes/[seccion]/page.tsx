@@ -7,14 +7,18 @@ import {
 import InformesShell from "@/views/admin/informes/InformesShell";
 import ResumenSection from "@/views/admin/informes/resumen";
 import RedencionesSection from "@/views/admin/informes/redenciones";
+import PuntosSection from "@/views/admin/informes/puntos";
 import AfiliadosSection from "@/views/admin/informes/afiliados";
+import HotelesSection from "@/views/admin/informes/hoteles";
 import PorVencerSection from "@/views/admin/informes/por-vencer";
 
 /** El slug de la URL decide qué sección se monta. */
 const SECTION_COMPONENTS: Record<string, React.ComponentType> = {
   resumen: ResumenSection,
   redenciones: RedencionesSection,
+  puntos: PuntosSection,
   afiliados: AfiliadosSection,
+  hoteles: HotelesSection,
   "por-vencer": PorVencerSection,
 };
 

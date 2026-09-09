@@ -30,6 +30,10 @@ export function useRefreshToken(): number {
 
 export interface Totals {
   afiliados: number;
+  /** Afiliados del CRM con al menos una membresía abierta */
+  afiliadosConMembresia: number;
+  /** Contactos del CRM que nunca recibieron puntos */
+  afiliadosSinMembresia: number;
   afiliadosConSaldo: number;
   membresias: number;
   puntosEntregados: number;
@@ -57,17 +61,29 @@ export interface OverviewData {
 }
 
 export interface RedemptionRow {
+  /** Clave de la fila: los ids de Zoho que la componen, unidos */
   id: string;
+  ids: string[];
   nombre: string;
+  nombres: string[];
+  /** Registros de Zoho que representa la fila (>1 = bono repartido FIFO) */
+  tramos: number;
   afiliado: string;
   email: string;
+  /** Membresía Padre que agrupa la redención */
+  rootId: string;
+  membresiaId: string;
+  membresiaIds: string[];
   membresia: string;
+  membresias: string[];
   puntos: number;
   estado: string;
   estadoRaw: string;
+  estadoMixto: boolean;
   fecha: string | null;
   bono: string;
   bonoSlug: string;
+  bonoPuntos: number;
   categoria: string;
   estadoEntrega: string;
   correoEntrega: string;
@@ -83,14 +99,24 @@ export interface RedemptionsData {
     puntos: number;
     porEstado: Record<string, number>;
     desdeWeb: number;
+    /** Puntos redimidos convertidos a pesos */
+    valorCOP: number;
+    /** Registros de Zoho detrás de esas redenciones (para cuadrar con el CRM) */
+    registrosZoho: number;
   };
 }
 
 export interface AffiliateRow {
+  /** Vacío si el afiliado no tiene membresía */
   rootId: string;
+  contactId: string;
+  /** false = está en el CRM pero nunca se le abrió membresía */
+  conMembresia: boolean;
   email: string;
   nombre: string;
   empresa: string;
+  ciudad: string;
+  cargo: string;
   membresiaNo: string;
   tipoAfiliado: string;
   estadoFidelizacion: string;
@@ -105,19 +131,51 @@ export interface AffiliateRow {
   ultimaActividad: string | null;
 }
 
+export interface AffiliateComparison {
+  grupo: "con" | "sin";
+  etiqueta: string;
+  afiliados: number;
+  empresas: number;
+  conSaldo: number;
+  conRedenciones: number;
+  puntosEntregados: number;
+  puntosRedimidos: number;
+  saldoDisponible: number;
+  /** Fracción (0–1) del padrón que representa el grupo */
+  participacion: number;
+}
+
+/** Estado de la lectura del módulo Contacts */
+export interface PadronStatus {
+  disponible: boolean;
+  truncado: boolean;
+  /** Afiliados activos del CRM */
+  contactos: number;
+  /** Redes con puntos cuyo contacto no está en el padrón activo */
+  conMembresiaFueraDelPadron: number;
+}
+
 export interface AffiliatesData {
   rows: AffiliateRow[];
   pagination: PaginationMeta;
   resumen: {
     afiliados: number;
+    conMembresia: number;
+    sinMembresia: number;
+    /** Padrón completo del CRM, al margen de los filtros */
+    afiliadosCRM: number;
     puntosEntregados: number;
     puntosRedimidos: number;
     saldoDisponible: number;
   };
+  comparativo: AffiliateComparison[];
+  padron: PadronStatus;
   tipos: string[];
 }
 
 export interface ExpiringRow {
+  /** Id del lote en Zoho: la única clave única de la fila */
+  loteId: string;
   rootId: string;
   membershipId: string;
   membershipName: string;
@@ -149,6 +207,66 @@ const MONTH_LABELS = [
   "ene", "feb", "mar", "abr", "may", "jun",
   "jul", "ago", "sep", "oct", "nov", "dic",
 ];
+
+export interface PointsMonthRow {
+  mes: string;
+  cargados: number;
+  lotes: number;
+  vencidos: number;
+  /** De lo cargado ese mes, cuánto sigue vivo hoy */
+  vivos: number;
+  cargadosCOP: number;
+  vencidosCOP: number;
+}
+
+export interface PointsData {
+  resumen: {
+    cargados: number;
+    disponibles: number;
+    redimidos: number;
+    vencidos: number;
+    /** Saldo vivo que caduca dentro de `riesgoDias` */
+    enRiesgo: number;
+    riesgoDias: number;
+    lotes: number;
+    afiliados: number;
+    /** cargados − (disponibles + redimidos + vencidos); debe ser 0 */
+    descuadre: number;
+  };
+  serieMensual: PointsMonthRow[];
+  porEstado: Array<{ estado: string; lotes: number; puntos: number }>;
+}
+
+export interface HotelRow {
+  hotel: string;
+  lotes: number;
+  puntosEntregados: number;
+  puntosRedimidos: number;
+  saldoVivo: number;
+  puntosVencidos: number;
+  afiliados: number;
+  membresias: number;
+  primeraEntrega: string | null;
+  ultimaEntrega: string | null;
+  valorEntregadoCOP: number;
+  valorRedimidoCOP: number;
+  /** Fracción (0–1) de los puntos del programa que emitió el hotel */
+  participacion: number;
+}
+
+export interface HotelsData {
+  rows: HotelRow[];
+  pagination: PaginationMeta;
+  resumen: {
+    hoteles: number;
+    puntosEntregados: number;
+    puntosRedimidos: number;
+    saldoVivo: number;
+    lotes: number;
+    /** Puntos cuyo lote no identifica hotel */
+    sinHotel: number;
+  };
+}
 
 export function monthLabels(month: string) {
   const [year, monthIndex] = month.split("-");

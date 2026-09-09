@@ -34,11 +34,25 @@ export const INFORME_SECTIONS: InformeSection[] = [
       "Cada canje con su afiliado, bono y estado de entrega. Incluye las creadas directamente en el CRM.",
   },
   {
+    slug: "puntos",
+    label: "Puntos",
+    title: "Puntos cargados, disponibles y vencidos",
+    description:
+      "El ciclo de vida de los puntos del programa: cuánto se cargó, cuánto sigue vivo, cuánto se canjeó y cuánto caducó sin usarse.",
+  },
+  {
     slug: "afiliados",
     label: "Afiliados",
     title: "Afiliados y saldos",
     description:
       "Un registro por red de membresía: puntos entregados, redimidos, saldo disponible y vencidos.",
+  },
+  {
+    slug: "hoteles",
+    label: "Hoteles",
+    title: "Estadísticas por hotel",
+    description:
+      "Puntos emitidos por cada hotel del portafolio, cuánto se ha redimido y qué sigue vivo. El hotel se toma de la orden de compra del lote.",
   },
   {
     slug: "por-vencer",

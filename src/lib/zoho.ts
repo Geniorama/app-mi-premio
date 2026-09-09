@@ -14,8 +14,26 @@ export interface ZohoTokenResponse {
   api_domain?: string;
 }
 
-let cachedAccessToken: string | null = null;
-let tokenExpiresAt: number = 0;
+/**
+ * La caché del access token cuelga de `globalThis` y no del módulo.
+ *
+ * Zoho limita con dureza las llamadas al endpoint de refresh (responde
+ * "You have made too many requests continuously"). En desarrollo, cada
+ * recompilación recarga este módulo: con la caché en una variable de módulo se
+ * perdía el token en cada guardado y se pedía uno nuevo, hasta agotar el
+ * límite. `globalThis` sobrevive al hot reload.
+ *
+ * En producción no cambia nada: cada instancia serverless sigue teniendo su
+ * propia caché, igual que antes.
+ */
+interface ZohoTokenCache {
+  token: string | null;
+  expiresAt: number;
+}
+
+const tokenCache: ZohoTokenCache = ((
+  globalThis as { __zohoTokenCache?: ZohoTokenCache }
+).__zohoTokenCache ??= { token: null, expiresAt: 0 });
 
 /**
  * Obtiene un access token válido usando el refresh token.
@@ -23,9 +41,11 @@ let tokenExpiresAt: number = 0;
  */
 export async function getZohoAccessToken(): Promise<string> {
   const now = Date.now();
-  if (cachedAccessToken && tokenExpiresAt > now + 5 * 60 * 1000) {
-    console.log("[Zoho] Usando access token en caché");
-    return cachedAccessToken;
+  if (tokenCache.token && tokenCache.expiresAt > now + 5 * 60 * 1000) {
+    // Sin log: el precalentado de informes pasa por aquí ~330 veces cada media
+    // hora y esta línea ahogaba el resto. Lo que interesa —cuándo se pide un
+    // token nuevo— sí se registra abajo.
+    return tokenCache.token;
   }
 
   console.log("[Zoho] Solicitando nuevo access token...");
@@ -47,8 +67,8 @@ export async function getZohoAccessToken(): Promise<string> {
   }
 
   const data = (await response.json()) as ZohoTokenResponse;
-  cachedAccessToken = data.access_token;
-  tokenExpiresAt = now + data.expires_in * 1000;
+  tokenCache.token = data.access_token;
+  tokenCache.expiresAt = now + data.expires_in * 1000;
 
   console.log("[Zoho] Conexión exitosa: Access token obtenido correctamente");
   return data.access_token;

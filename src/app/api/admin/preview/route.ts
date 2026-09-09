@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireActiveAdmin } from "@/lib/admin";
-import { searchContactByEmail } from "@/lib/zoho";
+import { searchContactByEmail, getMembershipByEmail } from "@/lib/zoho";
 import {
   createPreviewToken,
   sessionCookieOptions,
@@ -37,12 +37,32 @@ export async function POST(request: Request) {
     }
 
     // Se resuelve el contacto en Zoho para mostrar su nombre real y para no
-    // abrir previsualizaciones de correos que no existen en el CRM.
-    const contact = await searchContactByEmail(email);
+    // abrir previsualizaciones de correos que no existen en el CRM. La
+    // membresía se comprueba porque el área de afiliados se alimenta de ella:
+    // sin membresía el perfil sale vacío. El panel ya no ofrece el botón en
+    // ese caso, pero esconder un botón no es una barrera.
+    const [contact, membership] = await Promise.all([
+      searchContactByEmail(email),
+      getMembershipByEmail(email).catch((error) => {
+        console.error("[admin/preview] No se pudo leer la membresía:", error);
+        return null;
+      }),
+    ]);
+
     if (!contact) {
       return NextResponse.json(
         { error: "Ese correo no existe como contacto en Zoho CRM" },
         { status: 404 }
+      );
+    }
+
+    if (!membership) {
+      return NextResponse.json(
+        {
+          error:
+            "Ese afiliado todavía no tiene membresía en Zoho, así que no hay perfil que previsualizar.",
+        },
+        { status: 409 }
       );
     }
 

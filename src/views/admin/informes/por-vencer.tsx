@@ -11,6 +11,8 @@ import {
   ErrorNote,
   Pagination,
   formatNumber,
+  formatPointsAsCop,
+  MoneyCell,
   formatDate,
   inputClass,
   type Column,
@@ -83,10 +85,10 @@ export default function PorVencerSection() {
     },
     {
       key: "saldoLote",
-      header: "Puntos",
+      header: "Valor",
       numeric: true,
       render: (row) => (
-        <span className="font-semibold">{formatNumber(row.saldoLote)}</span>
+        <MoneyCell points={row.saldoLote} tone="critical" />
       ),
     },
     {
@@ -173,7 +175,12 @@ export default function PorVencerSection() {
       {data && (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatTile label="Puntos por vencer" value={data.resumen.puntos} tone="critical" />
+            <StatTile
+              label="Por vencer"
+              value={data.resumen.puntos}
+              money
+              tone="critical"
+            />
             <StatTile label="Afiliados afectados" value={data.resumen.afiliados} />
             <StatTile label="Lotes de puntos" value={data.resumen.lotes} />
           </div>
@@ -189,8 +196,9 @@ export default function PorVencerSection() {
                 .map((ventana) => ({
                   label: ventana.etiqueta,
                   value: ventana.puntos,
+                  display: formatPointsAsCop(ventana.puntos),
                   critical: ventana.clave === "vencidos",
-                  hint: `${formatNumber(ventana.lotes)} lotes · ${formatNumber(ventana.afiliados)} afiliados`,
+                  hint: `${formatNumber(ventana.puntos)} puntos · ${formatNumber(ventana.lotes)} lotes · ${formatNumber(ventana.afiliados)} afiliados`,
                 }))}
             />
           </Panel>
@@ -202,7 +210,7 @@ export default function PorVencerSection() {
             <DataTable
               columns={columns}
               rows={data.rows}
-              rowKey={(row) => `${row.membershipId}-${row.fechaVencimiento}-${row.fechaEntrega}`}
+              rowKey={(row) => row.loteId}
               emptyMessage="No hay puntos por vencer en esta ventana."
             />
             <Pagination

@@ -4,6 +4,7 @@ import { requireActiveAdmin } from "@/lib/admin";
 import { buildAffiliateReport } from "@/lib/zoho-reports";
 import { sanityFreshClient } from "@/sanity/client";
 import { redemptionsAuditQuery } from "@/sanity/queries";
+import { lastMonths } from "@/lib/months";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -14,23 +15,6 @@ interface AuditDoc {
   voucherCategory?: string;
   pointsRedeemed?: number;
   status?: string;
-}
-
-/** Últimos 12 meses en formato `AAAA-MM`, del más antiguo al más reciente. */
-function lastTwelveMonths(): string[] {
-  const months: string[] = [];
-  const cursor = new Date();
-  cursor.setDate(1);
-
-  for (let i = 11; i >= 0; i--) {
-    const date = new Date(cursor);
-    date.setMonth(cursor.getMonth() - i);
-    months.push(
-      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-    );
-  }
-
-  return months;
 }
 
 export async function GET(request: NextRequest) {
@@ -53,7 +37,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Serie mensual de redenciones (Zoho es la fuente de verdad del canje)
-    const months = lastTwelveMonths();
+    const months = lastMonths();
     const byMonth = new Map(
       months.map((month) => [month, { mes: month, redenciones: 0, puntos: 0 }])
     );

@@ -18,15 +18,33 @@
  */
 
 import { getZohoAccessToken } from "@/lib/zoho";
+import { hotelLabel } from "@/lib/hotels";
 
 const ZOHO_CRM_DOMAIN =
   process.env.ZOHO_CRM_DOMAIN || "https://www.zohoapis.com";
 
 const API = `${ZOHO_CRM_DOMAIN}/crm/v6`;
 
-/** Zoho limita la concurrencia por organización; 6 es un valor conservador. */
-const FETCH_CONCURRENCY = 6;
-const MAX_PAGES = 40; // tope de seguridad: 40 × 200 = 8.000 registros
+/**
+ * Peticiones simultáneas contra Zoho.
+ *
+ * Solo importa en el informe de lotes, que hace un GET por membresía (≈320).
+ * Medido contra el CRM real: con 6 tarda ~20 s, con 15 tarda ~7,5 s y con 25
+ * ~4,7 s, sin un solo error. 15 se queda en el límite de concurrencia que Zoho
+ * concede a una cuenta Enterprise; los 429 que aun así aparezcan los absorbe el
+ * reintento de `zohoGet`.
+ */
+const FETCH_CONCURRENCY = 15;
+/**
+ * Tope de seguridad por módulo, en páginas de 200 registros.
+ *
+ * Membresías y redenciones son cientos; los contactos son el padrón entero de
+ * la cadena y no caben en 8.000. El tope existe para que un módulo que crezca
+ * sin control no cuelgue el informe, no para recortar datos reales: cuando se
+ * alcanza, se avisa en el log.
+ */
+const MAX_PAGES = 40; // 8.000 registros
+const PAGE_SIZE = 200;
 
 // --------------------------------------------------------------------- tipos
 
@@ -53,6 +71,27 @@ export interface MembershipRow {
   Modified_Time?: string;
 }
 
+/**
+ * Un afiliado del CRM. No todos llegan a tener membresía: el contacto se crea
+ * al vincular la empresa y la membresía solo aparece cuando entra su primer
+ * lote de puntos.
+ */
+export interface ContactRow {
+  id: string;
+  Full_Name?: string | null;
+  Email?: string | null;
+  /** Estado del contacto en el CRM; casi todos son "Activo" */
+  Estado?: string | null;
+  /** Estado en el programa de fidelización. Solo lo tienen los afiliados. */
+  Estado_Fidelizaci_n?: string | null;
+  Cargo?: string | null;
+  /** Lookup: llega como { name, id } */
+  Ciudad_Principal?: { name: string; id: string } | null;
+  Account_Name?: { name: string; id: string } | null;
+  Created_Time?: string;
+  Modified_Time?: string;
+}
+
 export interface RedemptionRow {
   id: string;
   Name?: string;
@@ -63,13 +102,26 @@ export interface RedemptionRow {
   Modified_Time?: string;
 }
 
-/** Un afiliado = una red de membresías (Padre + sus Hijas) */
+/**
+ * Un afiliado del programa.
+ *
+ * Normalmente es una red de membresías (Padre + sus Hijas), pero también hay
+ * contactos en el CRM que nunca recibieron puntos: entran aquí con
+ * `conMembresia: false` y todas las cifras en cero, para poder comparar el
+ * padrón completo contra el que realmente está activo.
+ */
 export interface AffiliateReportRow {
-  /** id de la membresía Padre (raíz de la red) */
+  /** id de la membresía Padre (raíz de la red); vacío si no tiene membresía */
   rootId: string;
+  /** id del contacto en el CRM */
+  contactId: string;
+  /** false = está en el CRM pero nunca se le abrió membresía */
+  conMembresia: boolean;
   email: string;
   nombre: string;
   empresa: string;
+  ciudad: string;
+  cargo: string;
   membresiaNo: string;
   tipoAfiliado: string;
   estadoFidelizacion: string;
@@ -89,11 +141,21 @@ export interface AffiliateReportRow {
 }
 
 export interface PointsLotRow {
+  /**
+   * Id de la fila del subformulario. Es lo único que identifica un lote: una
+   * misma membresía puede cargar dos lotes el mismo día con el mismo
+   * vencimiento (dos órdenes de compra, o una carga partida).
+   */
+  loteId: string;
   rootId: string;
   membershipId: string;
   membershipName: string;
   email: string;
   nombre: string;
+  /** Hotel que originó el lote, extraído de `Entrega_OC` */
+  hotel: string;
+  /** El `Entrega_OC` en crudo, por si hay que rastrear el registro en el CRM */
+  entregaOC: string | null;
   puntosEntregados: number;
   puntosRedimidos: number;
   /** Entregados − redimidos: lo que queda vivo en el lote */
@@ -120,6 +182,16 @@ interface CacheEntry<T> {
  */
 const cacheStore = new Map<string, CacheEntry<unknown>>();
 
+/**
+ * Cargas en marcha, por clave.
+ *
+ * Sin esto, dos peticiones simultáneas del mismo informe (dos admins, o el
+ * doble render de React en desarrollo) lanzan dos recorridos completos de Zoho
+ * que compiten por la misma cuota de concurrencia: el informe tarda el doble.
+ * Quien llega segundo se cuelga de la carga que ya está corriendo.
+ */
+const inFlight = new Map<string, Promise<unknown>>();
+
 async function cached<T>(
   key: string,
   ttlMs: number,
@@ -129,13 +201,40 @@ async function cached<T>(
   const hit = cacheStore.get(key) as CacheEntry<T> | undefined;
   if (!force && hit && Date.now() < hit.expiresAt) return hit.value;
 
-  const value = await loader();
-  cacheStore.set(key, { value, expiresAt: Date.now() + ttlMs });
-  return value;
+  // También con `force`: una carga que ya está en marcha viene igual de fresca
+  // desde Zoho, así que el botón de recargar se cuelga de ella en vez de abrir
+  // un segundo recorrido en paralelo.
+  const running = inFlight.get(key) as Promise<T> | undefined;
+  if (running) return running;
+
+  const load = loader()
+    .then((value) => {
+      cacheStore.set(key, { value, expiresAt: Date.now() + ttlMs });
+      return value;
+    })
+    .catch((error: unknown) => {
+      // Un dato viejo informa mejor que un error: si Zoho falla y quedaba algo
+      // en caché, se sirve avisando en el log en vez de tumbar el informe.
+      if (hit) {
+        console.error(
+          `[zoho-reports] Falló la recarga de "${key}"; se sirve la copia en caché.`,
+          error
+        );
+        return hit.value;
+      }
+      throw error;
+    })
+    .finally(() => {
+      if (inFlight.get(key) === load) inFlight.delete(key);
+    });
+
+  inFlight.set(key, load);
+  return load;
 }
 
 export function clearReportsCache(): void {
   cacheStore.clear();
+  inFlight.clear();
 }
 
 // ---------------------------------------------------------------- utilidades
@@ -149,22 +248,53 @@ interface ZohoPage<T> {
   };
 }
 
+/** Errores que se reintentan: cuota de concurrencia y caídas pasajeras. */
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+const MAX_RETRIES = 3;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Con varias decenas de peticiones en paralelo, un 429 puntual de Zoho deja de
+ * ser una anécdota. Reintentar con espera creciente evita que un informe se
+ * quede sin los lotes de una membresía por un pico de concurrencia.
+ */
 async function zohoGet<T>(path: string): Promise<T | null> {
-  const token = await getZohoAccessToken();
-  const response = await fetch(`${API}${path}`, {
-    headers: { Authorization: `Zoho-oauthtoken ${token}` },
-    cache: "no-store",
-  });
+  for (let attempt = 0; ; attempt++) {
+    const token = await getZohoAccessToken();
 
-  if (response.status === 204 || response.status === 404) return null;
+    let response: Response;
+    try {
+      response = await fetch(`${API}${path}`, {
+        headers: { Authorization: `Zoho-oauthtoken ${token}` },
+        cache: "no-store",
+      });
+    } catch (error) {
+      if (attempt >= MAX_RETRIES) throw error;
+      await sleep(500 * 2 ** attempt);
+      continue;
+    }
 
-  if (!response.ok) {
-    const detail = await response.text();
-    console.error("[zoho-reports] GET falló:", path, response.status, detail);
-    throw new Error(`Zoho ${response.status}: ${detail.slice(0, 200)}`);
+    if (response.status === 204 || response.status === 404) return null;
+
+    if (!response.ok) {
+      const detail = await response.text();
+
+      if (RETRYABLE_STATUS.has(response.status) && attempt < MAX_RETRIES) {
+        const wait = 500 * 2 ** attempt;
+        console.warn(
+          `[zoho-reports] ${response.status} en ${path}; reintento ${attempt + 1} en ${wait}ms`
+        );
+        await sleep(wait);
+        continue;
+      }
+
+      console.error("[zoho-reports] GET falló:", path, response.status, detail);
+      throw new Error(`Zoho ${response.status}: ${detail.slice(0, 200)}`);
+    }
+
+    return (await response.json()) as T;
   }
-
-  return (await response.json()) as T;
 }
 
 /**
@@ -173,14 +303,15 @@ async function zohoGet<T>(path: string): Promise<T | null> {
  */
 async function listAllRecords<T>(
   module: string,
-  fields: string[]
+  fields: string[],
+  maxPages: number = MAX_PAGES
 ): Promise<T[]> {
   const records: T[] = [];
   const fieldsParam = encodeURIComponent(fields.join(","));
   let pageToken: string | null = null;
   let page = 0;
 
-  while (page < MAX_PAGES) {
+  while (page < maxPages) {
     const query: string =
       `/${module}?fields=${fieldsParam}&per_page=200` +
       (pageToken ? `&page_token=${encodeURIComponent(pageToken)}` : "");
@@ -195,11 +326,51 @@ async function listAllRecords<T>(
     pageToken = result.info.next_page_token;
   }
 
-  if (page >= MAX_PAGES) {
+  if (page >= maxPages) {
     console.warn(
-      `[zoho-reports] ${module}: se alcanzó el tope de ${MAX_PAGES} páginas; ` +
+      `[zoho-reports] ${module}: se alcanzó el tope de ${maxPages} páginas; ` +
         "el informe puede estar incompleto."
     );
+  }
+
+  return records;
+}
+
+/**
+ * Recorre un módulo filtrando en el servidor.
+ *
+ * A diferencia del listado completo, `/search` pagina con `page` y admite un
+ * criterio, así que Zoho devuelve solo lo que interesa. Es la diferencia entre
+ * traer 400 registros y recorrer los más de 80.000 contactos de la cadena.
+ */
+async function searchAllRecords<T>(
+  module: string,
+  criteria: string,
+  fields: string[],
+  maxPages = 20
+): Promise<T[]> {
+  const records: T[] = [];
+  const fieldsParam = encodeURIComponent(fields.join(","));
+  const criteriaParam = encodeURIComponent(criteria);
+
+  for (let page = 1; page <= maxPages; page++) {
+    const result = await zohoGet<ZohoPage<T>>(
+      `/${module}/search?criteria=${criteriaParam}&fields=${fieldsParam}` +
+        `&per_page=${PAGE_SIZE}&page=${page}`
+    );
+
+    // 204 (sin resultados) llega como null: no hay más páginas
+    if (!result?.data?.length) break;
+
+    records.push(...result.data);
+    if (!result.info?.more_records) break;
+
+    if (page === maxPages) {
+      console.warn(
+        `[zoho-reports] ${module}/search: se alcanzó el tope de ${maxPages} ` +
+          "páginas; el resultado puede estar incompleto."
+      );
+    }
   }
 
   return records;
@@ -345,14 +516,52 @@ const REDEMPTION_FIELDS = [
   "Modified_Time",
 ];
 
+const CONTACT_FIELDS = [
+  "Full_Name",
+  "Email",
+  "Estado",
+  "Estado_Fidelizaci_n",
+  "Cargo",
+  "Ciudad_Principal",
+  "Account_Name",
+  "Created_Time",
+  "Modified_Time",
+];
+
 const LIST_TTL_MS = 5 * 60 * 1000;
-const LOTS_TTL_MS = 15 * 60 * 1000;
+/**
+ * Los lotes son la carga cara (≈320 GET, unos 7 s), así que su caché dura algo
+ * más que el intervalo del cron de precalentado (`vercel.json`, cada 30 min):
+ * mientras el cron corra, nadie llega a encontrarla caducada.
+ */
+const LOTS_TTL_MS = 35 * 60 * 1000;
 
 export function listAllMemberships(force = false): Promise<MembershipRow[]> {
   return cached(
     "memberships",
     LIST_TTL_MS,
     () => listAllRecords<MembershipRow>("Membresias", MEMBERSHIP_FIELDS),
+    force
+  );
+}
+
+/**
+ * Criterio que separa a un afiliado del programa de cualquier otro contacto
+ * del CRM.
+ *
+ * `Estado` no sirve: casi los 80.000 contactos de la cadena están "Activo".
+ * El campo que solo llevan los afiliados es `Estado_Fidelizaci_n`, y "Activo"
+ * es el que cuenta — los "Inactivo" salieron del programa.
+ */
+const AFFILIATE_CRITERIA = "(Estado_Fidelizaci_n:equals:Activo)";
+
+/** Contactos que son afiliados activos del programa. */
+export function listAffiliateContacts(force = false): Promise<ContactRow[]> {
+  return cached(
+    "affiliate-contacts",
+    LIST_TTL_MS,
+    () =>
+      searchAllRecords<ContactRow>("Contacts", AFFILIATE_CRITERIA, CONTACT_FIELDS),
     force
   );
 }
@@ -368,8 +577,31 @@ export function listAllRedemptions(force = false): Promise<RedemptionRow[]> {
 
 // ---------------------------------------------------------------- agregación
 
+/**
+ * Estado de la lectura del padrón de contactos.
+ *
+ * Sin contactos el informe sigue funcionando para quien tiene membresía, pero
+ * el comparativo "con y sin membresía" queda sin la mitad de los datos. Si eso
+ * pasa hay que decirlo: un "0 sin membresía" se lee como un dato real.
+ */
+export interface PadronStatus {
+  /** false = Zoho no respondió el módulo Contacts */
+  disponible: boolean;
+  /** true = se alcanzó el tope de páginas y faltan contactos */
+  truncado: boolean;
+  /** Contactos con `Estado_Fidelizaci_n = Activo` */
+  contactos: number;
+  /**
+   * Redes de membresía cuyo contacto no está en el padrón activo (se dio de
+   * baja, o nunca llevó el campo). Siguen listadas porque tienen puntos: no se
+   * puede esconder saldo del programa. Se expone para poder depurarlo en Zoho.
+   */
+  conMembresiaFueraDelPadron: number;
+}
+
 export interface AffiliateReport {
   affiliates: AffiliateReportRow[];
+  padron: PadronStatus;
   /** Redenciones enriquecidas con el correo del afiliado */
   redemptions: EnrichedRedemption[];
   totals: ReportTotals;
@@ -392,6 +624,10 @@ export interface EnrichedRedemption {
 
 export interface ReportTotals {
   afiliados: number;
+  /** Afiliados del CRM con al menos una membresía abierta */
+  afiliadosConMembresia: number;
+  /** Contactos del CRM que nunca recibieron puntos */
+  afiliadosSinMembresia: number;
   afiliadosConSaldo: number;
   membresias: number;
   puntosEntregados: number;
@@ -411,10 +647,32 @@ export interface ReportTotals {
 export async function buildAffiliateReport(
   force = false
 ): Promise<AffiliateReport> {
-  const [memberships, redemptions] = await Promise.all([
+  const [memberships, redemptions, contacts] = await Promise.all([
     listAllMemberships(force),
     listAllRedemptions(force),
+    listAffiliateContacts(force).catch((error) => {
+      // El padrón es un extra: si Contacts falla, el informe sigue sirviendo
+      // para los afiliados que sí tienen membresía.
+      console.error("[zoho-reports] No se pudo listar Contacts:", error);
+      return [] as ContactRow[];
+    }),
   ]);
+
+  const padron: PadronStatus = {
+    disponible: contacts.length > 0,
+    // La búsqueda de Zoho corta en 2.000 registros; el padrón está muy por
+    // debajo, pero si algún día lo alcanza hay que avisarlo y no callarlo.
+    truncado: contacts.length >= 2000,
+    contactos: contacts.length,
+    conMembresiaFueraDelPadron: 0,
+  };
+
+  const contactById = new Map(contacts.map((contact) => [contact.id, contact]));
+  const contactByEmail = new Map(
+    contacts
+      .filter((contact) => contact.Email)
+      .map((contact) => [contact.Email!.toLowerCase().trim(), contact])
+  );
 
   const groups = groupByNetwork(memberships);
   const balances = networkBalances(groups);
@@ -455,6 +713,8 @@ export async function buildAffiliateReport(
   }
 
   const affiliates: AffiliateReportRow[] = [];
+  /** Contactos ya representados por una red de membresías */
+  const usedContacts = new Set<string>();
 
   for (const [rootId, records] of groups) {
     const root = records.find((r) => r.id === rootId) ?? records[0];
@@ -493,14 +753,30 @@ export async function buildAffiliateReport(
       .filter((f): f is string => Boolean(f))
       .sort();
 
+    const contactRef =
+      root.Contacto_Membresia ??
+      records.find((r) => r.Contacto_Membresia)?.Contacto_Membresia ??
+      null;
+    const contact =
+      (contactRef ? contactById.get(contactRef.id) : undefined) ??
+      (email ? contactByEmail.get(email) : undefined);
+
+    if (contact) usedContacts.add(contact.id);
+
     affiliates.push({
       rootId,
-      email,
-      nombre: root.Contacto_Membresia?.name ?? records.find((r) => r.Contacto_Membresia)?.Contacto_Membresia?.name ?? "",
-      empresa: root.Empresa_Membresia?.name ?? "",
+      contactId: contact?.id ?? contactRef?.id ?? "",
+      conMembresia: true,
+      email: email || contact?.Email?.toLowerCase().trim() || "",
+      nombre: contactRef?.name ?? contact?.Full_Name ?? "",
+      // La empresa vive en la membresía; si falta, la del contacto sirve igual
+      empresa: root.Empresa_Membresia?.name ?? contact?.Account_Name?.name ?? "",
+      ciudad: contact?.Ciudad_Principal?.name ?? "",
+      cargo: contact?.Cargo ?? "",
       membresiaNo: root.Membresia_No ?? "",
       tipoAfiliado: root.Tipo_Afiliado_1 ?? "",
-      estadoFidelizacion: root.Estado_Fidelizaci_n_1 ?? "",
+      estadoFidelizacion:
+        root.Estado_Fidelizaci_n_1 ?? contact?.Estado_Fidelizaci_n ?? "",
       puntosEntregados: sum((m) => m.TOTAL_PUNTOS),
       saldoDisponible,
       puntosRedimidos: consuming.reduce((total, r) => total + r.puntos, 0),
@@ -510,6 +786,35 @@ export async function buildAffiliateReport(
       redenciones: affiliateRedemptions.length,
       ultimaRedencion: fechasRedencion[fechasRedencion.length - 1] ?? null,
       ultimaActividad: fechas[fechas.length - 1] ?? null,
+    });
+  }
+
+  // Los contactos que ninguna membresía reclamó: están en el CRM pero nunca
+  // recibieron puntos. Van con todas las cifras en cero.
+  for (const contact of contacts) {
+    if (usedContacts.has(contact.id)) continue;
+
+    affiliates.push({
+      rootId: "",
+      contactId: contact.id,
+      conMembresia: false,
+      email: contact.Email?.toLowerCase().trim() ?? "",
+      nombre: contact.Full_Name ?? contact.Email ?? "",
+      empresa: contact.Account_Name?.name ?? "",
+      ciudad: contact.Ciudad_Principal?.name ?? "",
+      cargo: contact.Cargo ?? "",
+      membresiaNo: "",
+      tipoAfiliado: "",
+      estadoFidelizacion: contact.Estado_Fidelizaci_n ?? "",
+      puntosEntregados: 0,
+      saldoDisponible: 0,
+      puntosRedimidos: 0,
+      puntosVencidos: 0,
+      puntosPorVencer: 0,
+      ciclos: 0,
+      redenciones: 0,
+      ultimaRedencion: null,
+      ultimaActividad: contact.Modified_Time ?? null,
     });
   }
 
@@ -534,8 +839,15 @@ export async function buildAffiliateReport(
     puntosPorEstado[item.estado] = (puntosPorEstado[item.estado] ?? 0) + item.puntos;
   }
 
+  const conMembresia = affiliates.filter((a) => a.conMembresia);
+  padron.conMembresiaFueraDelPadron = conMembresia.filter(
+    (a) => !a.contactId || !contactById.has(a.contactId)
+  ).length;
+
   const totals: ReportTotals = {
     afiliados: affiliates.length,
+    afiliadosConMembresia: conMembresia.length,
+    afiliadosSinMembresia: affiliates.length - conMembresia.length,
     afiliadosConSaldo: affiliates.filter((a) => a.saldoDisponible > 0).length,
     membresias: memberships.length,
     puntosEntregados: affiliates.reduce((t, a) => t + a.puntosEntregados, 0),
@@ -548,7 +860,7 @@ export async function buildAffiliateReport(
     puntosPorEstado,
   };
 
-  return { affiliates, redemptions: enriched, totals };
+  return { affiliates, redemptions: enriched, totals, padron };
 }
 
 // -------------------------------------------------- lotes de puntos (vencer)
@@ -562,6 +874,8 @@ interface MembershipDetail extends MembershipRow {
     Fecha_de_vencimiento_Puntos?: string | null;
     Estado_Puntos_Entregados?: string | null;
     Se_Redimen?: boolean;
+    /** Lookup a la orden de compra; su nombre lleva el hotel */
+    Entrega_OC?: { name: string; id: string } | null;
   }>;
 }
 
@@ -621,8 +935,16 @@ function daysUntil(date: string | null): number | null {
  * Trae el subformulario `Puntos_Membresia` de cada membresía y lo aplana en
  * lotes de puntos con su fecha de vencimiento.
  *
- * Coste: un GET por membresía (≈300 hoy). Va cacheado 15 minutos y con
- * concurrencia limitada; aun así es el informe más pesado del panel.
+ * Coste: un GET por membresía (≈320 hoy), pidiendo solo el subformulario. Con
+ * la concurrencia actual son unos 7 segundos, cacheados 15 minutos y
+ * compartidos con "Puntos por vencer" y "Hoteles"; aun así es el informe más
+ * pesado del panel.
+ *
+ * Por qué no se resuelve de una sola vez: el listado de `Membresias` ignora el
+ * subformulario aunque se pida en `fields` (probado contra el CRM), y el
+ * módulo `Puntos_Membresia`, que sí se puede listar suelto, son 10.000 filas
+ * que Zoho solo pagina con `page_token` — 52 páginas en serie, más lentas que
+ * los GET en paralelo.
  */
 export async function listPointsLots(force = false): Promise<PointsLotRow[]> {
   return cached(
@@ -636,8 +958,10 @@ export async function listPointsLots(force = false): Promise<PointsLotRow[]> {
         FETCH_CONCURRENCY,
         async (membership) => {
           try {
+            // Solo el subformulario: el registro completo pesa 3,5 veces más
+            // y de él no se usa nada que no venga ya en el listado.
             const result = await zohoGet<{ data: MembershipDetail[] }>(
-              `/Membresias/${membership.id}`
+              `/Membresias/${membership.id}?fields=Puntos_Membresia`
             );
             return { membership, detail: result?.data?.[0] ?? null };
           } catch (error) {
@@ -671,12 +995,17 @@ export async function listPointsLots(force = false): Promise<PointsLotRow[]> {
           const redimidos = num(lot.Puntos_Redimidos);
           const vencimiento = lot.Fecha_de_vencimiento_Puntos ?? null;
 
+          const entregaOC = lot.Entrega_OC?.name ?? null;
+
           lots.push({
+            loteId: lot.id,
             rootId: rootIdOf(membership),
             membershipId: membership.id,
             membershipName: membership.Name ?? membership.id,
             email,
             nombre: membership.Contacto_Membresia?.name ?? "",
+            hotel: hotelLabel(entregaOC),
+            entregaOC,
             puntosEntregados: entregados,
             puntosRedimidos: redimidos,
             saldoLote: Math.max(entregados - redimidos, 0),
@@ -698,4 +1027,70 @@ export async function listPointsLots(force = false): Promise<PointsLotRow[]> {
     },
     force
   );
+}
+
+// ------------------------------------------------------------ precalentado
+
+export interface WarmupLoad {
+  clave: string;
+  registros: number;
+  ms: number;
+  error?: string;
+}
+
+export interface WarmupResult {
+  ok: boolean;
+  ms: number;
+  cargas: WarmupLoad[];
+}
+
+/**
+ * Rellena la caché de informes por adelantado, para que ningún administrador
+ * pague la carga en frío.
+ *
+ * Lo llama el cron (`/api/cron/warm-reports`). Fuerza las cuatro listas que
+ * sostienen el panel; `listPointsLots` arrastra consigo `memberships`, así que
+ * no hace falta pedirlas aparte.
+ *
+ * Una carga que falle no tumba a las demás: cada una se reporta por separado y
+ * el cron devuelve 500 si alguna cayó, para que el fallo se vea en el panel de
+ * ejecuciones en vez de pasar en silencio.
+ *
+ * Aviso de alcance: la caché vive en la memoria del proceso, así que el cron
+ * calienta **la instancia que atiende su petición**. Con el tráfico de este
+ * panel suele ser la misma que atiende a los admins, pero si el despliegue
+ * escala a varias instancias, alguna puede seguir arrancando en frío.
+ */
+export async function warmReportsCache(): Promise<WarmupResult> {
+  const started = Date.now();
+
+  const run = async (
+    clave: string,
+    load: () => Promise<unknown[]>
+  ): Promise<WarmupLoad> => {
+    const t = Date.now();
+    try {
+      const rows = await load();
+      return { clave, registros: rows.length, ms: Date.now() - t };
+    } catch (error) {
+      return {
+        clave,
+        registros: 0,
+        ms: Date.now() - t,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  };
+
+  const cargas = await Promise.all([
+    run("points-lots", () => listPointsLots(true)),
+    run("redemptions", () => listAllRedemptions(true)),
+    run("affiliate-contacts", () => listAffiliateContacts(true)),
+  ]);
+
+  return {
+    ok: cargas.every((carga) => !carga.error),
+    ms: Date.now() - started,
+    cargas,
+  };
 }

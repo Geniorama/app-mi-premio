@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FiTrendingUp, FiGift, FiStar, FiMinusCircle, FiX, FiFileText, FiDownload, FiCalendar, FiClock } from "react-icons/fi";
 import { MdHotel } from "react-icons/md";
+import { extractHotelName } from "@/lib/hotels";
 import { urlFor, buildImageSet } from "@/sanity/image";
 import type { ExtractosPage } from "@/sanity/types";
 
@@ -29,18 +30,6 @@ interface Redemption {
   estado: string | null;
   fecha: string | null;
 }
-
-/**
- * Extrae el nombre del hotel del string Entrega_OC.
- * Formato observado: "ME211_Mercure bh Zona Financiera_CRM - 000 - 699191"
- * Hotel = segmento entre el primer "_" y "_CRM".
- * Si no matchea, devuelve el string completo (fallback visible para el editor).
- */
-const extractHotelName = (entregaOC: string | null): string | null => {
-  if (!entregaOC) return null;
-  const match = entregaOC.match(/^[^_]+_(.+?)_CRM/);
-  return match ? match[1].trim() : entregaOC;
-};
 
 const formatDate = (dateStr: string | null) =>
   dateStr

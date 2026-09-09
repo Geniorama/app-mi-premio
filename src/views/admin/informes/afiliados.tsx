@@ -11,6 +11,7 @@ import {
   ErrorNote,
   Pagination,
   formatNumber,
+  MoneyCell,
   formatDate,
   inputClass,
   type Column,
@@ -32,6 +33,7 @@ export default function AfiliadosSection() {
   const [search, setSearch] = useState("");
   const [query_, setQuery] = useState("");
   const [tipo, setTipo] = useState("");
+  const [membresia, setMembresia] = useState("");
   const [conSaldo, setConSaldo] = useState(false);
   const [sort, setSort] = useState("puntosEntregados");
   const [direction, setDirection] = useState<"asc" | "desc">("desc");
@@ -50,11 +52,12 @@ export default function AfiliadosSection() {
     const params = new URLSearchParams();
     if (query_) params.set("q", query_);
     if (tipo) params.set("tipo", tipo);
+    if (membresia) params.set("membresia", membresia);
     if (conSaldo) params.set("conSaldo", "1");
     params.set("sort", sort);
     params.set("dir", direction);
     return params.toString();
-  }, [query_, tipo, conSaldo, sort, direction]);
+  }, [query_, tipo, membresia, conSaldo, sort, direction]);
 
   const { data, loading, error } = useReport<AffiliatesData>(
     `/api/admin/reports/affiliates?${withPagination(filterQuery, pagination.params)}`,
@@ -115,7 +118,23 @@ export default function AfiliadosSection() {
         </div>
       ),
     },
-    { key: "membresiaNo", header: "Membresía", render: (row) => row.membresiaNo || "—" },
+    {
+      key: "membresiaNo",
+      header: "Membresía",
+      render: (row) =>
+        row.conMembresia ? (
+          <div>
+            <p className="text-[#0b0b0b]">{row.membresiaNo || "—"}</p>
+            <p className="text-xs text-[#52514e]">
+              {formatNumber(row.ciclos)} {row.ciclos === 1 ? "ciclo" : "ciclos"}
+            </p>
+          </div>
+        ) : (
+          <span className="inline-block rounded bg-black/[0.06] px-1.5 py-0.5 text-xs font-medium text-[#52514e]">
+            Sin membresía
+          </span>
+        ),
+    },
     {
       key: "tipoAfiliado",
       header: "Tipo",
@@ -130,10 +149,12 @@ export default function AfiliadosSection() {
     },
     {
       key: "puntosRedimidos",
-      header: "Redimidos",
+      header: "Redimido",
       numeric: true,
       sortKey: "puntosRedimidos",
-      render: (row) => formatNumber(row.puntosRedimidos),
+      // Solo esta columna va en pesos: es lo que el afiliado ya consumió del
+      // programa. Las demás son saldos de puntos todavía sin gastar.
+      render: (row) => <MoneyCell points={row.puntosRedimidos} />,
     },
     {
       key: "saldoDisponible",
@@ -168,8 +189,17 @@ export default function AfiliadosSection() {
     {
       key: "preview",
       header: "",
-      render: (row) =>
-        row.email ? (
+      // Sin membresía no hay perfil que mirar: el área de afiliados se
+      // alimenta de la membresía en Zoho y saldría vacía.
+      render: (row) => {
+        if (!row.conMembresia) {
+          return <span className="text-xs text-[#898781]">Sin membresía</span>;
+        }
+        if (!row.email) {
+          return <span className="text-xs text-[#898781]">Sin correo</span>;
+        }
+
+        return (
           <button
             type="button"
             disabled={previewing === row.email}
@@ -179,9 +209,8 @@ export default function AfiliadosSection() {
           >
             {previewing === row.email ? "Abriendo…" : "Ver como"}
           </button>
-        ) : (
-          <span className="text-xs text-[#898781]">Sin correo</span>
-        ),
+        );
+      },
     },
   ];
 
@@ -218,6 +247,20 @@ export default function AfiliadosSection() {
               ))}
             </select>
           </Field>
+          <Field label="Membresía">
+            <select
+              className={inputClass}
+              value={membresia}
+              onChange={(event) => {
+                setMembresia(event.target.value);
+                reset();
+              }}
+            >
+              <option value="">Todos los del CRM</option>
+              <option value="con">Solo con membresía</option>
+              <option value="sin">Solo sin membresía</option>
+            </select>
+          </Field>
           <label className="flex h-9 cursor-pointer items-center gap-2 text-sm text-[#52514e]">
             <input
               type="checkbox"
@@ -240,20 +283,122 @@ export default function AfiliadosSection() {
       {data && (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-            <StatTile label="Afiliados" value={data.resumen.afiliados} />
+            <StatTile
+              label="Afiliados"
+              value={data.resumen.afiliados}
+              hint={
+                data.resumen.afiliados === data.resumen.afiliadosCRM
+                  ? `${formatNumber(data.resumen.conMembresia)} con membresía · ${formatNumber(
+                      data.resumen.sinMembresia
+                    )} sin`
+                  : `de ${formatNumber(data.resumen.afiliadosCRM)} en total`
+              }
+            />
             <StatTile label="Puntos entregados" value={data.resumen.puntosEntregados} />
-            <StatTile label="Puntos redimidos" value={data.resumen.puntosRedimidos} tone="accent" />
+            <StatTile
+              label="Redimido"
+              value={data.resumen.puntosRedimidos}
+              money
+              tone="accent"
+            />
             <StatTile label="Saldo disponible" value={data.resumen.saldoDisponible} />
           </div>
 
+          {!data.padron.disponible ? (
+            <ErrorNote message="No se pudo leer el módulo Contacts de Zoho, así que el comparativo solo incluye a quienes tienen membresía. Vuelve a intentarlo en unos minutos." />
+          ) : (
+            <Panel
+              title="Con membresía frente a sin membresía"
+              description={`${formatNumber(
+                data.padron.contactos
+              )} afiliados activos en el CRM. Sin membresía = afiliado registrado que todavía no ha recibido puntos.`}
+            >
+              <DataTable
+                rows={data.comparativo}
+                rowKey={(row) => row.grupo}
+                columns={[
+                  {
+                    key: "etiqueta",
+                    header: "Grupo",
+                    render: (row) => (
+                      <span className="font-medium text-[#0b0b0b]">{row.etiqueta}</span>
+                    ),
+                  },
+                  {
+                    key: "afiliados",
+                    header: "Afiliados",
+                    numeric: true,
+                    render: (row) => (
+                      <div>
+                        <p className="font-semibold">{formatNumber(row.afiliados)}</p>
+                        <p className="text-xs font-normal text-[#52514e]">
+                          {(row.participacion * 100).toFixed(1)} % del padrón
+                        </p>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "empresas",
+                    header: "Empresas",
+                    numeric: true,
+                    render: (row) => formatNumber(row.empresas),
+                  },
+                  {
+                    key: "conSaldo",
+                    header: "Con saldo",
+                    numeric: true,
+                    render: (row) => formatNumber(row.conSaldo),
+                  },
+                  {
+                    key: "conRedenciones",
+                    header: "Han redimido",
+                    numeric: true,
+                    render: (row) => formatNumber(row.conRedenciones),
+                  },
+                  {
+                    key: "puntosEntregados",
+                    header: "Entregado",
+                    numeric: true,
+                    render: (row) => <MoneyCell points={row.puntosEntregados} />,
+                  },
+                  {
+                    key: "saldoDisponible",
+                    header: "Saldo",
+                    numeric: true,
+                    render: (row) => (
+                      <MoneyCell points={row.saldoDisponible} tone="accent" />
+                    ),
+                  },
+                ]}
+              />
+              {data.padron.truncado && (
+                <p className="mt-4 text-xs font-medium text-[#d03b3b]">
+                  Se alcanzó el tope de lectura del módulo Contacts: faltan afiliados
+                  por contar en el grupo &ldquo;sin membresía&rdquo;.
+                </p>
+              )}
+              {data.padron.conMembresiaFueraDelPadron > 0 && (
+                <p className="mt-4 text-xs text-[#52514e]">
+                  {formatNumber(data.padron.conMembresiaFueraDelPadron)} membresías
+                  pertenecen a contactos que no están en el padrón activo (dados de
+                  baja en fidelización). Siguen listadas porque tienen puntos, así que
+                  el total con membresía puede superar al padrón.
+                </p>
+              )}
+            </Panel>
+          )}
+
           <Panel
             title="Afiliados"
-            description="Un registro por red de membresía (Padre + sus ciclos)"
+            description="Un registro por red de membresía; los contactos sin membresía van con las cifras en cero."
           >
             <DataTable
               columns={columns}
               rows={data.rows}
-              rowKey={(row) => row.rootId}
+              // Una fila = una red de membresía, y un mismo contacto puede tener
+              // varias redes: el contacto solo identifica a los que no tienen
+              // ninguna (rootId vacío).
+              rowKey={(row) => row.rootId || row.contactId}
               sort={sort}
               direction={direction}
               onSort={handleSort}
