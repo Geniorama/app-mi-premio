@@ -88,6 +88,12 @@ export interface ContactRow {
   /** Lookup: llega como { name, id } */
   Ciudad_Principal?: { name: string; id: string } | null;
   Account_Name?: { name: string; id: string } | null;
+  /**
+   * Propietario del registro en el CRM: el comercial que atiende a ese
+   * afiliado. Es un campo estándar de Zoho y trae también el correo, así que
+   * sirve para agrupar sin tener que cruzar contra el módulo Users.
+   */
+  Owner?: { name: string; id: string; email?: string } | null;
   Created_Time?: string;
   Modified_Time?: string;
 }
@@ -125,6 +131,13 @@ export interface AffiliateReportRow {
   membresiaNo: string;
   tipoAfiliado: string;
   estadoFidelizacion: string;
+  /**
+   * Comercial que atiende al afiliado: el propietario del contacto en Zoho.
+   * Vacío si la red no tiene contacto en el padrón activo.
+   */
+  comercial: string;
+  comercialId: string;
+  comercialEmail: string;
   /** Suma de TOTAL_PUNTOS de la red */
   puntosEntregados: number;
   /** Puntos_Globales_Red del Padre (fallback: suma de saldos) */
@@ -524,6 +537,7 @@ const CONTACT_FIELDS = [
   "Cargo",
   "Ciudad_Principal",
   "Account_Name",
+  "Owner",
   "Created_Time",
   "Modified_Time",
 ];
@@ -777,6 +791,11 @@ export async function buildAffiliateReport(
       tipoAfiliado: root.Tipo_Afiliado_1 ?? "",
       estadoFidelizacion:
         root.Estado_Fidelizaci_n_1 ?? contact?.Estado_Fidelizaci_n ?? "",
+      // El comercial cuelga del contacto, no de la membresía: una red sin
+      // contacto en el padrón activo se queda sin él.
+      comercial: contact?.Owner?.name ?? "",
+      comercialId: contact?.Owner?.id ?? "",
+      comercialEmail: contact?.Owner?.email ?? "",
       puntosEntregados: sum((m) => m.TOTAL_PUNTOS),
       saldoDisponible,
       puntosRedimidos: consuming.reduce((total, r) => total + r.puntos, 0),
@@ -806,6 +825,9 @@ export async function buildAffiliateReport(
       membresiaNo: "",
       tipoAfiliado: "",
       estadoFidelizacion: contact.Estado_Fidelizaci_n ?? "",
+      comercial: contact.Owner?.name ?? "",
+      comercialId: contact.Owner?.id ?? "",
+      comercialEmail: contact.Owner?.email ?? "",
       puntosEntregados: 0,
       saldoDisponible: 0,
       puntosRedimidos: 0,

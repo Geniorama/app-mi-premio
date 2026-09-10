@@ -48,12 +48,17 @@ export async function GET(request: NextRequest) {
     const search = params.get("q")?.toLowerCase().trim();
     if (search) {
       rows = rows.filter((row) =>
-        [row.nombre, row.email, row.membresiaNo, row.empresa, row.ciudad]
+        [row.nombre, row.email, row.membresiaNo, row.empresa, row.ciudad, row.comercial]
           .join(" ")
           .toLowerCase()
           .includes(search)
       );
     }
+
+    // Id del propietario del contacto en Zoho; "sin" aísla a los que no tienen
+    const comercial = params.get("comercial");
+    if (comercial === "sin") rows = rows.filter((row) => !row.comercialId);
+    else if (comercial) rows = rows.filter((row) => row.comercialId === comercial);
 
     const tipo = params.get("tipo");
     if (tipo) rows = rows.filter((row) => row.tipoAfiliado === tipo);
@@ -102,6 +107,8 @@ export async function GET(request: NextRequest) {
         { key: "empresa", header: "Empresa", value: (r) => r.empresa },
         { key: "ciudad", header: "Ciudad", value: (r) => r.ciudad },
         { key: "cargo", header: "Cargo", value: (r) => r.cargo },
+        { key: "comercial", header: "Comercial", value: (r) => r.comercial },
+        { key: "comercialEmail", header: "Correo del comercial", value: (r) => r.comercialEmail },
         { key: "tipoAfiliado", header: "Tipo de afiliado", value: (r) => r.tipoAfiliado },
         { key: "estado", header: "Estado fidelización", value: (r) => r.estadoFidelizacion },
         { key: "puntosEntregados", header: "Puntos entregados", value: (r) => r.puntosEntregados },
@@ -149,6 +156,17 @@ export async function GET(request: NextRequest) {
       // Si el padrón no se pudo leer, el comparativo miente por omisión
       padron: report.padron,
       tipos: [...new Set(report.affiliates.map((r) => r.tipoAfiliado))].filter(Boolean),
+      // Para el desplegable del filtro: siempre el padrón completo, no lo que
+      // quede tras filtrar, o el propio filtro se quedaría sin opciones.
+      comerciales: [
+        ...new Map(
+          report.affiliates
+            .filter((row) => row.comercialId)
+            .map((row) => [row.comercialId, row.comercial])
+        ),
+      ]
+        .map(([id, nombre]) => ({ id, nombre }))
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, "es")),
       generadoEn: new Date().toISOString(),
     });
   } catch (error) {

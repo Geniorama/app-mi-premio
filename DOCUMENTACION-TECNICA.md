@@ -522,7 +522,10 @@ Todos exigen `requireActiveAdmin()` y aceptan `?format=csv` y `?refresh=1` (salt
 |---|---|---|
 | `overview` | KPIs del programa, serie mensual de redenciones, top afiliados, top bonos | — |
 | `redemptions` | Redenciones de Zoho enriquecidas con la auditoría de Sanity | `from`, `to`, `estado`, `bono`, `origen`, `q` |
-| `affiliates` | Una fila por red de membresía | `q`, `tipo`, `conSaldo`, `sort`, `dir` |
+| `points` | Ciclo de vida de los puntos por mes (cargados, vivos, vencidos) | — |
+| `affiliates` | Una fila por red de membresía | `q`, `tipo`, `comercial`, `membresia`, `conSaldo`, `sort`, `dir` |
+| `owners` | Una fila por comercial, con los afiliados que tiene a cargo y sus altas | `q`, `orden`, `sinComercial`, `desde`, `hasta` |
+| `hotels` | Una fila por hotel, sobre los lotes de puntos que emitió | `q`, `orden`, `sinHotel` |
 | `expiring` | Lotes de puntos con su fecha de vencimiento | `dias`, `incluirVencidos`, `q` |
 
 El CSV usa `;` como separador y lleva BOM, porque el destino real es Excel en español; los
@@ -530,7 +533,7 @@ valores que empiezan por `= + - @` se neutralizan para que Excel no los ejecute 
 
 ### Paginación
 
-`redemptions`, `affiliates` y `expiring` paginan **en el servidor** (`page`, `pageSize`; 25 por
+`redemptions`, `affiliates`, `owners`, `hotels` y `expiring` paginan **en el servidor** (`page`, `pageSize`; 25 por
 defecto, 200 como máximo) y devuelven un objeto `pagination` con `total`, `totalPages`, `from` y
 `to`. Se hace en el servidor y no en el navegador porque el informe de vencimientos produce miles
 de lotes: enviarlos todos para recortarlos en el cliente desperdiciaría la transferencia y
@@ -557,7 +560,7 @@ lateral, la validación del slug y el título de cada página; un slug desconoci
 | `sections.ts` | registro de secciones (slug, etiqueta, título, descripción) |
 | `shared.tsx` | tipos, `useReport`, `usePagination` y el contexto de recarga |
 | `InformesShell.tsx` | encabezado común y botón "Actualizar datos" |
-| `resumen.tsx`, `redenciones.tsx`, `afiliados.tsx`, `por-vencer.tsx` | una sección cada uno |
+| `resumen.tsx`, `redenciones.tsx`, `puntos.tsx`, `afiliados.tsx`, `comerciales.tsx`, `hoteles.tsx`, `por-vencer.tsx` | una sección cada uno |
 
 El token de recarga viaja por **contexto** desde `InformesShell`: al ser cada sección una ruta
 independiente, ya no existe un componente padre que pueda pasarlo por props.
@@ -578,6 +581,57 @@ Verificado contra el CRM real (304 membresías, 239 Padre / 64 Hija, 21 redencio
   del Padre, el mismo criterio que usa `/api/user/membership`, para que panel y perfil nunca
   muestren cifras distintas.
 - **`Categor_a` no existe en Zoho**: el código lo referencia pero siempre llega vacío.
+
+**Comerciales.** El comercial que atiende a un afiliado **no es un campo del programa**: es el
+propietario del contacto en Zoho (`Owner`, campo estándar del CRM, que llega como
+`{ name, id, email }`). Es la asignación que ya mantiene el equipo comercial, así que el informe
+la agrega y no la reinterpreta: para reasignar a alguien se cambia el propietario del contacto en
+Zoho y el panel lo recoge en la siguiente lectura (caché de 5 min, o "Actualizar datos").
+
+Tres cosas que conviene tener claras al leer ese informe:
+
+1. **Se agrupa por `Owner.id`, no por el nombre.** Dos comerciales homónimos son dos filas, y
+   renombrar a alguien en el CRM no le parte el histórico en dos.
+2. **`afiliados` cuenta redes de membresía, `contactos` cuenta personas.** Son la misma unidad que
+   usa el informe de Afiliados: un contacto con dos redes suma dos filas.
+3. **El comercial cuelga del contacto, no de la membresía.** Una red cuyo contacto salió del
+   padrón activo (`Estado_Fidelizaci_n ≠ Activo`) se queda sin propietario identificable y cae en
+   *Sin comercial asignado*. Es el mismo hueco que ya reporta `padron.conMembresiaFueraDelPadron`.
+   Al comprobarlo contra el CRM, los 405 contactos afiliados activos tenían `Owner` (15
+   comerciales distintos), así que ese grupo debería estar vacío o casi.
+
+Si Zoho no responde el módulo `Contacts`, **todo** cae en *Sin comercial asignado*. El informe lo
+avisa en pantalla en vez de mostrar un cero silencioso, porque un listado vacío se lee como "no
+hay comerciales" y no como "no se pudo leer el padrón".
+
+**Altas: cuándo entró un afiliado al programa.** Es la pregunta más delicada del informe, porque
+**Zoho no guarda esa fecha**. Comprobado contra el CRM:
+
+| Fecha candidata | Por qué no sirve / sí sirve |
+|---|---|
+| `Contacts.Created_Time` | Cuándo entró la persona al CRM, no al programa. Los 543 afiliados (405 activos + 138 inactivos) se crearon **todos antes de junio de 2026**: mediría cero en los últimos meses |
+| `Solicitud_de_Fidelizaci_n` | Es un sí/no **sin fecha**. Su población (426) es prácticamente la misma |
+| `Membresias.Created_Time` | Es la fecha de la **migración**: 115 registros creados de golpe en febrero de 2026. No es el alta de nadie |
+| **Primer lote de `Puntos_Membresia`** | ✅ El primer hecho de negocio con fecha real: el día en que el afiliado empezó a acumular |
+
+El panel usa el **primer lote de puntos** (`lib/altas.ts`, `altaByNetwork()`: el mínimo
+`Fecha_de_Entrega` de la red, excluyendo lotes `Cancelado` igual que el resto del panel).
+
+Tres consecuencias que hay que conocer antes de interpretar el informe:
+
+1. **Un afiliado registrado que nunca recibió puntos no tiene alta.** No hay fecha que contar, así
+   que no entra en ninguna serie ni en ningún rango. El informe lo expone aparte (`sinAlta`) para
+   que ese hueco no se lea como un cero.
+2. **Febrero de 2026 es un pico artificial** (113 altas): es cuando la migración cargó los
+   primeros puntos de casi todo el padrón, no cuando esa gente se inscribió. El ritmo real del
+   programa se lee de junio de 2026 en adelante (4, 13, 7, 4 en jun-sep).
+3. **Obliga a cargar `listPointsLots`**, la lectura cara del panel. Por eso este endpoint tiene
+   `maxDuration = 300` como Hoteles: en frío son ~9 s, pero el precalentado la mantiene caliente.
+
+El rango (`desde`/`hasta`, `AAAA-MM-DD`) solo afecta a la columna **Altas**; el resto de cifras
+son del histórico. Los límites se comparan como texto ISO recortado a 10 caracteres, sin
+construir `Date`, para que ningún corrimiento de zona horaria mueva los bordes del rango. La
+respuesta devuelve el rango **aplicado**, no el pedido, y el panel pinta el encabezado con eso.
 
 **Puntos por vencer.** El detalle de vencimientos vive en el subformulario `Puntos_Membresia`,
 que Zoho solo entrega en el GET individual: es el informe caro (≈300 peticiones, ~20 s la primera
@@ -620,6 +674,11 @@ de su expiración. El `refresh_token` es de larga vida: si se revoca, **toda** l
 `Date_of_Birth`.
 
 Elegibilidad para login: `Estado === "Activo" && Estado_Fidelizaci_n === "Activo"`.
+
+Los informes del panel leen el mismo módulo con su propia lista (`CONTACT_FIELDS` en
+`zoho-reports.ts`), que añade **`Owner`** —el propietario del registro, es decir el comercial que
+atiende al afiliado— y `Created_Time` / `Modified_Time`. `Owner` llega como
+`{ name, id, email }`, así que no hace falta cruzar contra el módulo `Users`.
 
 **`Membresias`** — estructura **Padre / Hija**:
 
@@ -891,6 +950,7 @@ curl "http://localhost:3000/api/cron/warm-reports" \
 | Nueva ruta protegida | `middleware.ts` (`PROTECTED_PATHS` **y** `matcher`) + carpeta en `(protected-routes)` |
 | Dar de alta un administrador | Panel → Usuarios (o Studio → "Administradores del panel", creando y **publicando**) |
 | Cambiar quién puede gestionar administradores | `canManageAdmins` en `src/lib/admin-roles.ts` |
+| Reasignar el comercial de un afiliado | Zoho CRM → contacto → cambiar **propietario**. No hay campo propio en el programa ni forma de hacerlo desde el panel |
 | Cambiar un esquema de Sanity | Repositorio `../studio-mi-premio-cms` → `npm run deploy` (nunca por MCP) |
 | Nuevo módulo del panel | `NAV_ITEMS` en `src/views/admin/AdminShell.tsx` + carpeta en `src/app/admin/` |
 | Nueva sección de informes | `INFORME_SECTIONS` en `src/views/admin/informes/sections.ts` + su componente + entrada en `SECTION_COMPONENTS` de `[seccion]/page.tsx` |

@@ -227,3 +227,52 @@ export function OrdinalBarList({
     </ul>
   );
 }
+
+// ------------------------------------------------------------- minigráfico
+
+/**
+ * Barras diminutas para leer una tendencia dentro de una celda de tabla.
+ *
+ * No lleva ejes ni cifras: la columna de al lado ya da el número exacto y el
+ * minigráfico solo aporta la forma. Por eso es `aria-hidden` y va acompañado
+ * de un `title` con el periodo, para que quien use lector de pantalla no
+ * pierda nada: la información está en el texto de la fila.
+ *
+ * La escala es **propia de cada fila** (su propio máximo). Comparar la altura
+ * entre dos comerciales distintos no significa nada; comparar la forma de uno
+ * consigo mismo, sí.
+ */
+export function Sparkline({
+  values,
+  title,
+}: {
+  values: number[];
+  title?: string;
+}) {
+  const max = Math.max(...values, 0);
+
+  if (!values.length || max === 0) {
+    return <span className="text-xs text-[#898781]">—</span>;
+  }
+
+  return (
+    <span
+      className="inline-flex h-6 items-end gap-px align-middle"
+      title={title}
+      aria-hidden="true"
+    >
+      {values.map((value, index) => (
+        <span
+          key={index}
+          className="w-1 rounded-sm"
+          style={{
+            // Un mínimo visible para que un mes con altas no se confunda con
+            // un mes en blanco; el cero se queda como una marca tenue.
+            height: value === 0 ? 2 : Math.max(3, (value / max) * 24),
+            backgroundColor: value === 0 ? GRID : BRAND_GREEN,
+          }}
+        />
+      ))}
+    </span>
+  );
+}

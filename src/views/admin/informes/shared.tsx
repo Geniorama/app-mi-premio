@@ -120,6 +120,10 @@ export interface AffiliateRow {
   membresiaNo: string;
   tipoAfiliado: string;
   estadoFidelizacion: string;
+  /** Comercial que lo atiende: propietario del contacto en Zoho */
+  comercial: string;
+  comercialId: string;
+  comercialEmail: string;
   puntosEntregados: number;
   saldoDisponible: number;
   puntosRedimidos: number;
@@ -171,6 +175,74 @@ export interface AffiliatesData {
   comparativo: AffiliateComparison[];
   padron: PadronStatus;
   tipos: string[];
+  /** Comerciales presentes en el padrón, para el desplegable del filtro */
+  comerciales: Array<{ id: string; nombre: string }>;
+}
+
+export interface OwnerRow {
+  /** Id del usuario de Zoho; vacío en el grupo sin comercial */
+  comercialId: string;
+  comercial: string;
+  email: string;
+  /** Filas del informe de afiliados (redes de membresía + contactos sueltos) */
+  afiliados: number;
+  /** Personas distintas del CRM */
+  contactos: number;
+  conMembresia: number;
+  sinMembresia: number;
+  conSaldo: number;
+  conRedenciones: number;
+  empresas: number;
+  puntosEntregados: number;
+  puntosRedimidos: number;
+  saldoDisponible: number;
+  puntosVencidos: number;
+  puntosPorVencer: number;
+  redenciones: number;
+  /** Afiliados que estrenaron puntos dentro del rango pedido */
+  altas: number;
+  /** Afiliados suyos que nunca recibieron puntos: no tienen fecha de alta */
+  sinAlta: number;
+  /** Altas de cada uno de los últimos 12 meses, del más antiguo al más nuevo */
+  serie: number[];
+  ultimaAlta: string | null;
+  valorEntregadoCOP: number;
+  valorRedimidoCOP: number;
+  /** Fracción (0–1) de los puntos entregados del programa */
+  participacion: number;
+  /** Redimidos ÷ entregados */
+  tasaRedencion: number;
+  /** Fracción de sus afiliados que ha redimido al menos una vez */
+  tasaActivacion: number;
+  ultimaRedencion: string | null;
+  ultimaActividad: string | null;
+}
+
+export interface OwnersData {
+  rows: OwnerRow[];
+  pagination: PaginationMeta;
+  resumen: {
+    comerciales: number;
+    afiliados: number;
+    /** Altas dentro del rango elegido */
+    altas: number;
+    /** Altas del último mes de la serie, al margen del rango */
+    altasMesActual: number;
+    /** Afiliados sin fecha de alta porque nunca recibieron puntos */
+    sinAlta: number;
+    puntosEntregados: number;
+    puntosRedimidos: number;
+    saldoDisponible: number;
+    tasaRedencion: number;
+    /** Afiliados sin propietario identificado en el CRM */
+    sinComercial: number;
+  };
+  /** Los 12 meses de la serie, en `AAAA-MM` y de más antiguo a más nuevo */
+  meses: string[];
+  serieAltas: Array<{ mes: string; altas: number }>;
+  /** El rango realmente aplicado, tal y como lo entendió el servidor */
+  rango: { desde: string | null; hasta: string | null };
+  padron: PadronStatus;
 }
 
 export interface ExpiringRow {

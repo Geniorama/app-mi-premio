@@ -9,6 +9,7 @@ import ResumenSection from "@/views/admin/informes/resumen";
 import RedencionesSection from "@/views/admin/informes/redenciones";
 import PuntosSection from "@/views/admin/informes/puntos";
 import AfiliadosSection from "@/views/admin/informes/afiliados";
+import ComercialesSection from "@/views/admin/informes/comerciales";
 import HotelesSection from "@/views/admin/informes/hoteles";
 import PorVencerSection from "@/views/admin/informes/por-vencer";
 
@@ -18,6 +19,7 @@ const SECTION_COMPONENTS: Record<string, React.ComponentType> = {
   redenciones: RedencionesSection,
   puntos: PuntosSection,
   afiliados: AfiliadosSection,
+  comerciales: ComercialesSection,
   hoteles: HotelesSection,
   "por-vencer": PorVencerSection,
 };

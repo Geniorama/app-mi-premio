@@ -41,7 +41,8 @@ como afiliado en Zoho, y tener cuenta de afiliado tampoco te da acceso al panel.
 
 A la izquierda está el menú. Hoy hay dos módulos:
 
-- **Informes** — todo lo relativo a puntos y redenciones. Se despliega en cuatro secciones.
+- **Informes** — todo lo relativo a puntos y redenciones. Se despliega en siete secciones:
+  Resumen, Redenciones, Puntos, Afiliados, Comerciales, Hoteles y Puntos por vencer.
 - **Usuarios** — quién puede entrar al panel. *Solo lo ven los perfiles autorizados.*
 
 Arriba a la derecha aparecen tu nombre, tu rol y el botón **Salir**.
@@ -102,8 +103,13 @@ lo pide desde el sitio.
 Una fila por afiliado, con sus puntos entregados, redimidos, saldo disponible, vencidos y su
 número de redenciones.
 
-Puedes buscar por nombre, correo o número de membresía, filtrar por tipo de afiliado, y mostrar
-solo quienes tienen saldo. **Pulsa el encabezado de una columna para ordenar** por ella.
+Puedes buscar por nombre, correo o número de membresía, filtrar por tipo de afiliado, filtrar
+por **comercial** y mostrar solo quienes tienen saldo. **Pulsa el encabezado de una columna para
+ordenar** por ella.
+
+La columna **Comercial** te dice quién atiende a cada afiliado. Si buscas la cartera completa de
+una persona, el filtro **Comercial** te la deja sola en pantalla; para ver los totales de todos,
+usa el informe de Comerciales.
 
 > **Sobre "Ciclos".** En Zoho cada afiliado tiene una membresía principal y varias "hijas", una
 > por ciclo. El panel las agrupa y te muestra el total consolidado, que es la cifra que el
@@ -125,6 +131,57 @@ los 30 minutos.
 > **Queda registrado.** Cada vez que alguien usa **Ver como** se guarda quién miró la cuenta de
 > quién. Es una herramienta de soporte, no de curiosidad: estás accediendo a datos personales de
 > un afiliado.
+
+### 3.3.b Comerciales
+
+Una fila por comercial, con la cartera de afiliados que tiene a cargo: cuántos son, cuántos
+puntos se les entregaron, cuánto se ha redimido y qué saldo queda vivo.
+
+| Columna | Qué significa |
+|---|---|
+| **Afiliados** | Cuántos tiene asignados, y cuántos de ellos ya tienen membresía abierta |
+| **Entregado** | Puntos que han recibido sus afiliados, en pesos y en puntos |
+| **Redimido** | Cuánto de eso ya se canjeó por bonos |
+| **Tasa de redención** | Qué porcentaje de lo entregado se ha usado |
+| **Activados** | Cuántos de sus afiliados han redimido al menos una vez |
+| **Altas** | Cuántos afiliados suyos entraron al programa en el periodo elegido |
+| **Saldo** | Puntos vivos que su cartera todavía puede gastar |
+| **Por vencer** | De ese saldo, cuánto caduca pronto |
+
+Puedes ordenar por cualquiera de esas cifras, buscar por nombre o correo, y ocultar el grupo
+*Sin comercial asignado*.
+
+#### Cuántos afiliados entran en un periodo
+
+El bloque **Periodo de altas** responde a "¿cuántos usuarios inscribió cada comercial el último
+mes?". Elige un preset —**Mes en curso**, **Último mes cerrado**, **Últimos 3 meses**, **Últimos
+12 meses** o **Todo el histórico**— o escribe un rango a mano en **Desde** y **Hasta**.
+
+La columna **Altas** se recalcula con ese periodo. Al lado verás un minigráfico con la evolución
+de los últimos 12 meses, y arriba el gráfico **Altas mes a mes** con el total de los comerciales
+que tengas a la vista.
+
+> **Ojo: el periodo solo afecta a la columna Altas.** Las demás cifras (entregado, redimido,
+> saldo) son siempre del histórico completo. Es a propósito: el saldo de un afiliado no
+> "pertenece" al mes en que entró.
+
+> **Qué cuenta como alta.** Zoho no guarda una fecha de inscripción al programa, así que el panel
+> cuenta a alguien el mes en que **recibió sus primeros puntos**: es el primer hecho con fecha
+> que existe en el CRM. Un afiliado que está registrado pero aún no ha recibido puntos no aparece
+> en ninguna alta; el pie del informe te dice cuántos están en esa situación.
+
+> **Febrero de 2026 se sale de la escala** (113 altas). No fue un mes excepcional de captación:
+> es cuando se cargaron los primeros puntos de casi todo el padrón al montar el programa. Para
+> leer el ritmo real, mira de junio de 2026 en adelante.
+
+> **De dónde sale el comercial.** Es el **propietario del contacto en Zoho**: la asignación que
+> el equipo ya mantiene en el CRM. El panel solo la lee. Si un afiliado aparece con el comercial
+> equivocado, se corrige cambiando el propietario del contacto en Zoho; el panel lo recoge en
+> unos minutos (o al pulsar **Actualizar datos**).
+
+> **"Sin comercial asignado".** Normalmente está vacío. Si aparecen afiliados ahí, suelen ser
+> personas que salieron del programa en el CRM pero conservan puntos: siguen contando porque su
+> saldo es real, pero ya no tienen propietario que los reclame.
 
 ### 3.4 Puntos por vencer
 

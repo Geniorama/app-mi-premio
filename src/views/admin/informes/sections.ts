@@ -48,6 +48,13 @@ export const INFORME_SECTIONS: InformeSection[] = [
       "Un registro por red de membresía: puntos entregados, redimidos, saldo disponible y vencidos.",
   },
   {
+    slug: "comerciales",
+    label: "Comerciales",
+    title: "Gestión por comercial",
+    description:
+      "Cada comercial con los afiliados que tiene a cargo: puntos entregados, cuánto se ha redimido y qué saldo queda vivo. El comercial es el propietario del contacto en Zoho.",
+  },
+  {
     slug: "hoteles",
     label: "Hoteles",
     title: "Estadísticas por hotel",

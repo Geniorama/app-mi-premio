@@ -33,6 +33,7 @@ export default function AfiliadosSection() {
   const [search, setSearch] = useState("");
   const [query_, setQuery] = useState("");
   const [tipo, setTipo] = useState("");
+  const [comercial, setComercial] = useState("");
   const [membresia, setMembresia] = useState("");
   const [conSaldo, setConSaldo] = useState(false);
   const [sort, setSort] = useState("puntosEntregados");
@@ -52,12 +53,13 @@ export default function AfiliadosSection() {
     const params = new URLSearchParams();
     if (query_) params.set("q", query_);
     if (tipo) params.set("tipo", tipo);
+    if (comercial) params.set("comercial", comercial);
     if (membresia) params.set("membresia", membresia);
     if (conSaldo) params.set("conSaldo", "1");
     params.set("sort", sort);
     params.set("dir", direction);
     return params.toString();
-  }, [query_, tipo, membresia, conSaldo, sort, direction]);
+  }, [query_, tipo, comercial, membresia, conSaldo, sort, direction]);
 
   const { data, loading, error } = useReport<AffiliatesData>(
     `/api/admin/reports/affiliates?${withPagination(filterQuery, pagination.params)}`,
@@ -133,6 +135,22 @@ export default function AfiliadosSection() {
           <span className="inline-block rounded bg-black/[0.06] px-1.5 py-0.5 text-xs font-medium text-[#52514e]">
             Sin membresía
           </span>
+        ),
+    },
+    {
+      key: "comercial",
+      header: "Comercial",
+      sortKey: "comercial",
+      render: (row) =>
+        row.comercial ? (
+          <div className="max-w-48">
+            <p className="truncate text-[#0b0b0b]">{row.comercial}</p>
+            {row.comercialEmail && (
+              <p className="truncate text-xs text-[#52514e]">{row.comercialEmail}</p>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs text-[#898781]">Sin asignar</span>
         ),
     },
     {
@@ -245,6 +263,24 @@ export default function AfiliadosSection() {
                   {item}
                 </option>
               ))}
+            </select>
+          </Field>
+          <Field label="Comercial">
+            <select
+              className={`${inputClass} max-w-56`}
+              value={comercial}
+              onChange={(event) => {
+                setComercial(event.target.value);
+                reset();
+              }}
+            >
+              <option value="">Todos</option>
+              {(data?.comerciales ?? []).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.nombre}
+                </option>
+              ))}
+              <option value="sin">Sin comercial asignado</option>
             </select>
           </Field>
           <Field label="Membresía">
