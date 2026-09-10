@@ -523,7 +523,7 @@ Todos exigen `requireActiveAdmin()` y aceptan `?format=csv` y `?refresh=1` (salt
 | `overview` | KPIs del programa, serie mensual de redenciones, top afiliados, top bonos | — |
 | `redemptions` | Redenciones de Zoho enriquecidas con la auditoría de Sanity | `from`, `to`, `estado`, `bono`, `origen`, `q` |
 | `points` | Ciclo de vida de los puntos por mes (cargados, vivos, vencidos) | — |
-| `affiliates` | Una fila por red de membresía | `q`, `tipo`, `comercial`, `membresia`, `conSaldo`, `sort`, `dir` |
+| `affiliates` | Una fila por red de membresía | `q`, `tipo`, `sector`, `comercial`, `membresia`, `conSaldo`, `sort`, `dir` |
 | `owners` | Una fila por comercial, con los afiliados que tiene a cargo y sus altas | `q`, `orden`, `sinComercial`, `desde`, `hasta` |
 | `hotels` | Una fila por hotel, sobre los lotes de puntos que emitió | `q`, `orden`, `sinHotel` |
 | `expiring` | Lotes de puntos con su fecha de vencimiento | `dias`, `incluirVencidos`, `q` |
@@ -581,6 +581,28 @@ Verificado contra el CRM real (304 membresías, 239 Padre / 64 Hija, 21 redencio
   del Padre, el mismo criterio que usa `/api/user/membership`, para que panel y perfil nunca
   muestren cifras distintas.
 - **`Categor_a` no existe en Zoho**: el código lo referencia pero siempre llega vacío.
+
+**Sector (agencia / corporativo).** Tampoco existe en Zoho: `Tipo_Afiliado` distingue usuario
+único / múltiple / grupo empresarial, `Tipo_de_Contatco` es el rol en la cuenta (GDR, decisor,
+facturación) y `rea_a_la_que_Pertenece` es el departamento de la persona. Ninguno habla del
+negocio de la empresa. Se deduce del **nombre de la empresa** en `lib/sectores.ts`: si menciona
+"agencia" es *Agencia*; si no, *Corporativo*.
+
+Dos cosas que hay que saber antes de tocar esa regla:
+
+1. **La comparación ignora mayúsculas y acentos, y no es opcional.** Los nombres del CRM están en
+   mayúsculas (`AGENCIA DE VIAJES Y TURISMO AVIATUR S.A.S`), así que un `includes("Agencia")`
+   literal encuentra **cero** coincidencias. Ignorándolas encuentra 6 empresas y 53 afiliados
+   (12,7 % del padrón).
+2. **La regla es deliberadamente tosca y se equivoca en los dos sentidos.** Deja fuera agencias
+   que no llevan la palabra en el nombre (`PANAMERICANA DE VIAJES SAS`, `DE UNA COLOMBIA TOURS`,
+   `BUSINESS TRAVEL EXPERIENCE SAS`) y admite lo que no es agencia de viajes
+   (`AGENCIA COLOCADORA DE SEGUROS BOYACÁ CASANARE LIMITADA`). En el padrón hay 19 empresas con
+   "travel", 14 con "viaje", 14 con "tour" y 9 con "turismo" que **no** dicen "agencia" y por
+   tanto cuentan como corporativas.
+
+Es una inferencia, no un dato del CRM. La forma correcta de arreglarlo es dar de alta un campo de
+sector en Zoho; el día que exista, `lib/sectores.ts` es el único archivo que hay que tocar.
 
 **Comerciales.** El comercial que atiende a un afiliado **no es un campo del programa**: es el
 propietario del contacto en Zoho (`Owner`, campo estándar del CRM, que llega como
@@ -951,6 +973,7 @@ curl "http://localhost:3000/api/cron/warm-reports" \
 | Dar de alta un administrador | Panel → Usuarios (o Studio → "Administradores del panel", creando y **publicando**) |
 | Cambiar quién puede gestionar administradores | `canManageAdmins` en `src/lib/admin-roles.ts` |
 | Reasignar el comercial de un afiliado | Zoho CRM → contacto → cambiar **propietario**. No hay campo propio en el programa ni forma de hacerlo desde el panel |
+| Cambiar cómo se decide el sector de un afiliado | `src/lib/sectores.ts` — único sitio. Hoy se deduce del nombre de la empresa porque Zoho no tiene campo de sector |
 | Cambiar un esquema de Sanity | Repositorio `../studio-mi-premio-cms` → `npm run deploy` (nunca por MCP) |
 | Nuevo módulo del panel | `NAV_ITEMS` en `src/views/admin/AdminShell.tsx` + carpeta en `src/app/admin/` |
 | Nueva sección de informes | `INFORME_SECTIONS` en `src/views/admin/informes/sections.ts` + su componente + entrada en `SECTION_COMPONENTS` de `[seccion]/page.tsx` |

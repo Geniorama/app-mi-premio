@@ -115,6 +115,8 @@ export interface AffiliateRow {
   email: string;
   nombre: string;
   empresa: string;
+  /** Deducido del nombre de la empresa: "Agencia" o "Corporativo" */
+  sector: string;
   ciudad: string;
   cargo: string;
   membresiaNo: string;
@@ -149,6 +151,24 @@ export interface AffiliateComparison {
   participacion: number;
 }
 
+/**
+ * Un sector del padrón. El sector se deduce del nombre de la empresa
+ * ("agencia" en el nombre = Agencia; el resto, Corporativo), porque Zoho no
+ * tiene ningún campo que lo diga.
+ */
+export interface SectorSegment {
+  sector: string;
+  afiliados: number;
+  empresas: number;
+  conSaldo: number;
+  conRedenciones: number;
+  puntosEntregados: number;
+  puntosRedimidos: number;
+  saldoDisponible: number;
+  /** Fracción (0–1) del padrón que representa el sector */
+  participacion: number;
+}
+
 /** Estado de la lectura del módulo Contacts */
 export interface PadronStatus {
   disponible: boolean;
@@ -166,6 +186,8 @@ export interface AffiliatesData {
     afiliados: number;
     conMembresia: number;
     sinMembresia: number;
+    /** De los filtrados, cuántos son de agencia */
+    agencias: number;
     /** Padrón completo del CRM, al margen de los filtros */
     afiliadosCRM: number;
     puntosEntregados: number;
@@ -173,6 +195,8 @@ export interface AffiliatesData {
     saldoDisponible: number;
   };
   comparativo: AffiliateComparison[];
+  /** Segmento por sector, medido sobre el padrón completo */
+  porSector: SectorSegment[];
   padron: PadronStatus;
   tipos: string[];
   /** Comerciales presentes en el padrón, para el desplegable del filtro */

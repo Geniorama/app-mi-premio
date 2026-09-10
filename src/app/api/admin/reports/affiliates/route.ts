@@ -5,6 +5,7 @@ import { buildAffiliateReport } from "@/lib/zoho-reports";
 import { toCsv, csvResponse, formatDateTimeForCsv } from "@/lib/csv";
 import { parsePagination, paginate } from "@/lib/pagination";
 import { pointsToCop } from "@/lib/points";
+import { SECTORES } from "@/lib/sectores";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -40,6 +41,23 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    // El segmento por sector mide el padrón completo, igual que el comparativo
+    // de membresía: es la foto del programa, no de lo que quede tras filtrar.
+    const porSector = SECTORES.map((sector) => {
+      const subset = todos.filter((row) => row.sector === sector);
+      return {
+        sector,
+        afiliados: subset.length,
+        empresas: new Set(subset.map((row) => row.empresa).filter(Boolean)).size,
+        conSaldo: subset.filter((row) => row.saldoDisponible > 0).length,
+        conRedenciones: subset.filter((row) => row.redenciones > 0).length,
+        puntosEntregados: subset.reduce((t, r) => t + r.puntosEntregados, 0),
+        puntosRedimidos: subset.reduce((t, r) => t + r.puntosRedimidos, 0),
+        saldoDisponible: subset.reduce((t, r) => t + r.saldoDisponible, 0),
+        participacion: todos.length > 0 ? subset.length / todos.length : 0,
+      };
+    });
+
     // "con" | "sin" — sin el filtro se listan todos los afiliados del CRM
     const membresia = params.get("membresia");
     if (membresia === "con") rows = rows.filter((row) => row.conMembresia);
@@ -54,6 +72,9 @@ export async function GET(request: NextRequest) {
           .includes(search)
       );
     }
+
+    const sector = params.get("sector");
+    if (sector) rows = rows.filter((row) => row.sector === sector);
 
     // Id del propietario del contacto en Zoho; "sin" aísla a los que no tienen
     const comercial = params.get("comercial");
@@ -105,6 +126,7 @@ export async function GET(request: NextRequest) {
         },
         { key: "membresiaNo", header: "N.º de membresía", value: (r) => r.membresiaNo },
         { key: "empresa", header: "Empresa", value: (r) => r.empresa },
+        { key: "sector", header: "Sector", value: (r) => r.sector },
         { key: "ciudad", header: "Ciudad", value: (r) => r.ciudad },
         { key: "cargo", header: "Cargo", value: (r) => r.cargo },
         { key: "comercial", header: "Comercial", value: (r) => r.comercial },
@@ -139,6 +161,7 @@ export async function GET(request: NextRequest) {
       afiliados: rows.length,
       conMembresia: rows.filter((row) => row.conMembresia).length,
       sinMembresia: rows.filter((row) => !row.conMembresia).length,
+      agencias: rows.filter((row) => row.sector === "Agencia").length,
       /** Padrón completo del CRM, al margen de los filtros */
       afiliadosCRM: todos.length,
       puntosEntregados: rows.reduce((t, r) => t + r.puntosEntregados, 0),
@@ -153,6 +176,7 @@ export async function GET(request: NextRequest) {
       pagination,
       resumen,
       comparativo,
+      porSector,
       // Si el padrón no se pudo leer, el comparativo miente por omisión
       padron: report.padron,
       tipos: [...new Set(report.affiliates.map((r) => r.tipoAfiliado))].filter(Boolean),

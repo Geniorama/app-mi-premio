@@ -19,6 +19,7 @@
 
 import { getZohoAccessToken } from "@/lib/zoho";
 import { hotelLabel } from "@/lib/hotels";
+import { sectorDeEmpresa, type Sector } from "@/lib/sectores";
 
 const ZOHO_CRM_DOMAIN =
   process.env.ZOHO_CRM_DOMAIN || "https://www.zohoapis.com";
@@ -138,6 +139,12 @@ export interface AffiliateReportRow {
   comercial: string;
   comercialId: string;
   comercialEmail: string;
+  /**
+   * Sector deducido del nombre de la empresa (ver `lib/sectores.ts`). No hay
+   * campo de sector en Zoho: se infiere, y "Corporativo" es el valor por
+   * defecto de la regla, no un dato confirmado del CRM.
+   */
+  sector: Sector;
   /** Suma de TOTAL_PUNTOS de la red */
   puntosEntregados: number;
   /** Puntos_Globales_Red del Padre (fallback: suma de saldos) */
@@ -777,6 +784,11 @@ export async function buildAffiliateReport(
 
     if (contact) usedContacts.add(contact.id);
 
+    // La empresa se calcula una vez y de ella sale el sector, para que la
+    // columna y el segmento no puedan contradecirse.
+    const empresa =
+      root.Empresa_Membresia?.name ?? contact?.Account_Name?.name ?? "";
+
     affiliates.push({
       rootId,
       contactId: contact?.id ?? contactRef?.id ?? "",
@@ -784,7 +796,8 @@ export async function buildAffiliateReport(
       email: email || contact?.Email?.toLowerCase().trim() || "",
       nombre: contactRef?.name ?? contact?.Full_Name ?? "",
       // La empresa vive en la membresía; si falta, la del contacto sirve igual
-      empresa: root.Empresa_Membresia?.name ?? contact?.Account_Name?.name ?? "",
+      empresa,
+      sector: sectorDeEmpresa(empresa),
       ciudad: contact?.Ciudad_Principal?.name ?? "",
       cargo: contact?.Cargo ?? "",
       membresiaNo: root.Membresia_No ?? "",
@@ -820,6 +833,7 @@ export async function buildAffiliateReport(
       email: contact.Email?.toLowerCase().trim() ?? "",
       nombre: contact.Full_Name ?? contact.Email ?? "",
       empresa: contact.Account_Name?.name ?? "",
+      sector: sectorDeEmpresa(contact.Account_Name?.name),
       ciudad: contact.Ciudad_Principal?.name ?? "",
       cargo: contact.Cargo ?? "",
       membresiaNo: "",

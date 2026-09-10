@@ -145,6 +145,23 @@ La columna **Comercial** te dice quién atiende a cada afiliado. Si buscas la ca
 una persona, el filtro **Comercial** te la deja sola en pantalla; para ver los totales de todos,
 usa el informe de Comerciales.
 
+#### Agencias y corporativos
+
+La columna **Sector** separa a los afiliados de **agencia** de los **corporativos**, y el filtro
+del mismo nombre te deja ver solo unos u otros. Arriba, el bloque **Agencias frente a
+corporativos** compara los dos grupos: cuántos afiliados y empresas hay en cada uno, cuántos
+tienen saldo, cuántos han redimido y cuántos puntos mueven.
+
+> **Cómo se decide el sector.** Zoho no tiene ningún campo que diga a qué se dedica una empresa,
+> así que el panel lo deduce del **nombre**: si menciona "agencia", es agencia; si no,
+> corporativo. Hoy son 53 afiliados de agencia (6 empresas) frente a 363 corporativos.
+
+> **Es una aproximación, no un dato del CRM.** La regla deja fuera agencias que no llevan esa
+> palabra en el nombre —"PANAMERICANA DE VIAJES SAS" o "DE UNA COLOMBIA TOURS" salen como
+> corporativas— y admite alguna que no es agencia de viajes, como "AGENCIA COLOCADORA DE SEGUROS".
+> Sirve para hacerse una idea del reparto; para una cifra exacta habría que registrar el sector
+> en Zoho.
+
 > **Sobre "Ciclos".** En Zoho cada afiliado tiene una membresía principal y varias "hijas", una
 > por ciclo. El panel las agrupa y te muestra el total consolidado, que es la cifra que el
 > afiliado ve en su perfil.

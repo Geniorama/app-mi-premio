@@ -33,6 +33,7 @@ export default function AfiliadosSection() {
   const [search, setSearch] = useState("");
   const [query_, setQuery] = useState("");
   const [tipo, setTipo] = useState("");
+  const [sector, setSector] = useState("");
   const [comercial, setComercial] = useState("");
   const [membresia, setMembresia] = useState("");
   const [conSaldo, setConSaldo] = useState(false);
@@ -53,13 +54,14 @@ export default function AfiliadosSection() {
     const params = new URLSearchParams();
     if (query_) params.set("q", query_);
     if (tipo) params.set("tipo", tipo);
+    if (sector) params.set("sector", sector);
     if (comercial) params.set("comercial", comercial);
     if (membresia) params.set("membresia", membresia);
     if (conSaldo) params.set("conSaldo", "1");
     params.set("sort", sort);
     params.set("dir", direction);
     return params.toString();
-  }, [query_, tipo, comercial, membresia, conSaldo, sort, direction]);
+  }, [query_, tipo, sector, comercial, membresia, conSaldo, sort, direction]);
 
   const { data, loading, error } = useReport<AffiliatesData>(
     `/api/admin/reports/affiliates?${withPagination(filterQuery, pagination.params)}`,
@@ -136,6 +138,29 @@ export default function AfiliadosSection() {
             Sin membresía
           </span>
         ),
+    },
+    {
+      key: "sector",
+      header: "Sector",
+      sortKey: "sector",
+      render: (row) => (
+        <div className="max-w-48">
+          <span
+            className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${
+              row.sector === "Agencia"
+                ? "bg-custom-green/10 text-custom-green"
+                : "bg-black/[0.06] text-[#52514e]"
+            }`}
+          >
+            {row.sector}
+          </span>
+          {row.empresa && (
+            <p className="truncate text-xs text-[#52514e]" title={row.empresa}>
+              {row.empresa}
+            </p>
+          )}
+        </div>
+      ),
     },
     {
       key: "comercial",
@@ -263,6 +288,20 @@ export default function AfiliadosSection() {
                   {item}
                 </option>
               ))}
+            </select>
+          </Field>
+          <Field label="Sector">
+            <select
+              className={inputClass}
+              value={sector}
+              onChange={(event) => {
+                setSector(event.target.value);
+                reset();
+              }}
+            >
+              <option value="">Todos</option>
+              <option value="Agencia">Agencia</option>
+              <option value="Corporativo">Corporativo</option>
             </select>
           </Field>
           <Field label="Comercial">
@@ -423,6 +462,85 @@ export default function AfiliadosSection() {
               )}
             </Panel>
           )}
+
+          <Panel
+            title="Agencias frente a corporativos"
+            description="Segmento del padrón completo, al margen de los filtros. El sector se deduce del nombre de la empresa."
+          >
+            <DataTable
+              rows={data.porSector}
+              rowKey={(row) => row.sector}
+              columns={[
+                {
+                  key: "sector",
+                  header: "Sector",
+                  render: (row) => (
+                    <span className="font-medium text-[#0b0b0b]">{row.sector}</span>
+                  ),
+                },
+                {
+                  key: "afiliados",
+                  header: "Afiliados",
+                  numeric: true,
+                  render: (row) => (
+                    <div>
+                      <p className="font-semibold">{formatNumber(row.afiliados)}</p>
+                      <p className="text-xs font-normal text-[#52514e]">
+                        {(row.participacion * 100).toFixed(1)} % del padrón
+                      </p>
+                    </div>
+                  ),
+                },
+                {
+                  key: "empresas",
+                  header: "Empresas",
+                  numeric: true,
+                  render: (row) => formatNumber(row.empresas),
+                },
+                {
+                  key: "conSaldo",
+                  header: "Con saldo",
+                  numeric: true,
+                  render: (row) => formatNumber(row.conSaldo),
+                },
+                {
+                  key: "conRedenciones",
+                  header: "Han redimido",
+                  numeric: true,
+                  render: (row) => formatNumber(row.conRedenciones),
+                },
+                {
+                  key: "puntosEntregados",
+                  header: "Entregado",
+                  numeric: true,
+                  render: (row) => <MoneyCell points={row.puntosEntregados} />,
+                },
+                {
+                  key: "puntosRedimidos",
+                  header: "Redimido",
+                  numeric: true,
+                  render: (row) => (
+                    <MoneyCell points={row.puntosRedimidos} tone="accent" />
+                  ),
+                },
+                {
+                  key: "saldoDisponible",
+                  header: "Saldo",
+                  numeric: true,
+                  render: (row) => formatNumber(row.saldoDisponible),
+                },
+              ]}
+            />
+            <p className="mt-4 text-xs text-[#52514e]">
+              Zoho no tiene un campo de sector, así que se deduce del nombre de la
+              empresa: si menciona <strong>&ldquo;agencia&rdquo;</strong> cuenta como
+              agencia y, si no, como corporativo. La regla no distingue mayúsculas ni
+              acentos —los nombres del CRM están en mayúsculas—, pero <strong>sí deja
+              fuera a las agencias que no llevan esa palabra en el nombre</strong>
+              (&ldquo;PANAMERICANA DE VIAJES SAS&rdquo;, &ldquo;DE UNA COLOMBIA
+              TOURS&rdquo;), que aparecen como corporativas.
+            </p>
+          </Panel>
 
           <Panel
             title="Afiliados"
