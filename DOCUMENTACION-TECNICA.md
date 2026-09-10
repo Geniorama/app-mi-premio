@@ -577,9 +577,14 @@ Verificado contra el CRM real (304 membresías, 239 Padre / 64 Hija, 21 redencio
   redimidos se calculan desde el módulo `Redenciones`, excluyendo las canceladas y rechazadas.
 - **COQL no está disponible**: el token OAuth actual responde `OAUTH_SCOPE_MISMATCH`. Toda la
   agregación ocurre en el servidor.
-- **Un afiliado = una red** (Padre + sus Hijas). El saldo autoritativo es `Puntos_Globales_Red`
-  del Padre, el mismo criterio que usa `/api/user/membership`, para que panel y perfil nunca
-  muestren cifras distintas.
+- **Un afiliado = una red** (la raíz y todos sus ciclos, incluidos los ciclos que cuelgan de otro
+  ciclo). La red se resuelve **subiendo por `Membresia_Padre` hasta la raíz**, no un escalón: hay
+  redes de tres niveles y agruparlas por el padre inmediato partía al afiliado en dos filas con
+  sus puntos repartidos entre ambas.
+- **El saldo de la red es la suma de `Saldo_Puntos_Disponibles` de sus registros**, el mismo
+  criterio que usa `/api/user/membership`, para que panel y perfil nunca muestren cifras
+  distintas. No se usa `Puntos_Globales_Red`: Zoho solo consolida ahí un nivel de hijas y no lo
+  recalcula al redimir, así que unas veces se queda corto y otras largo (medido: 3 redes de 248).
 - **`Categor_a` no existe en Zoho**: el código lo referencia pero siempre llega vacío.
 
 **Sector (agencia / corporativo).** Tampoco existe en Zoho: `Tipo_Afiliado` distingue usuario
@@ -705,22 +710,30 @@ atiende al afiliado— y `Created_Time` / `Modified_Time`. `Owner` llega como
 **`Membresias`** — estructura **Padre / Hija**:
 
 - Una membresía **Hija** por ciclo; suele tener el email en `Correo_electr_nico_1`.
-- La membresía **Padre** concentra el saldo consolidado en `Puntos_Globales_Red`, la lista
-  `Membresias_Hijas_Relacionadas` y el puntero `ID_Ultima_Hija_Activa`.
+- La membresía **Padre** tiene la lista `Membresias_Hijas_Relacionadas`, el puntero
+  `ID_Ultima_Hija_Activa` y un saldo consolidado en `Puntos_Globales_Red`. **Ese campo no es de
+  fiar** y el código no lo usa: consolida un solo nivel de hijas y no se recalcula al redimir.
+- La jerarquía **no siempre tiene dos niveles**: hay ciclos colgados de otro ciclo (raíz → hija →
+  nieta), y hay raíces con `Correo_electr_nico_1` y raíces sin él.
+- **`Membresias_Hijas_Relacionadas` puede estar incompleta**: se han visto ciclos que existen en
+  el módulo pero que su Padre no lista. Por eso la red se arma por los dos extremos.
 - Subformulario `Puntos_Membresia` con `Puntos_Entregados`, `Puntos_Redimidos`,
   `Fecha_de_Entrega`, `Fecha_de_vencimiento_Puntos`, `Estado_Puntos_Entregados`, `Entrega_OC`,
   `Redencion_No`, `Se_Redimen`.
 
 `getMembershipByEmail(email)` resuelve la red completa:
 
-1. Busca por `(Correo_electr_nico_1:equals:<email>)`. **Fallback:** si no hay resultado, busca por
-   `(Name:equals:<email>)` — algunos afiliados solo tienen el correo en el "Nombre de Membresía",
-   típicamente registros Padre.
-2. Trae el registro completo por ID (el `GET` individual incluye subformularios y lookups).
-3. Si tiene `Membresia_Padre`, trae el Padre y las demás Hijas (en paralelo).
+1. Busca **todos** los registros con `(Correo_electr_nico_1:equals:<email>)`. **Fallback:** si no
+   hay resultado, busca por `(Name:equals:<email>)` — algunos afiliados solo tienen el correo en
+   el "Nombre de Membresía", típicamente registros Padre.
+2. Trae cada uno completo por ID (el `GET` individual incluye subformularios y lookups).
+3. **Sube** por `Membresia_Padre` hasta la raíz y **baja** por `Membresias_Hijas_Relacionadas`
+   nivel a nivel. Los dos recorridos hacen falta: la búsqueda por correo no encuentra las raíces
+   que no lo tienen, y el enlace de hijas a veces deja registros fuera. Lo que la búsqueda
+   encontró y el recorrido no, se agrega igual (con un aviso en el log).
 4. Devuelve un objeto sintético con:
-   - `Saldo_Puntos_Disponibles` = `Puntos_Globales_Red` del Padre (fallback a su saldo propio),
-   - `Puntos_Membresia` = historial consolidado de Padre + Hijas, ordenado por fecha desc,
+   - `Saldo_Puntos_Disponibles` = **suma** de los saldos de toda la red,
+   - `Puntos_Membresia` = historial consolidado de toda la red, ordenado por fecha desc,
    - `redFifo` = **campo calculado, no existe en Zoho**: registros con saldo > 0 ordenados por su
      fecha de entrega más antigua,
    - `id` = el primer registro de `redFifo` (destino FIFO por defecto).

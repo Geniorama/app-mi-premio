@@ -214,22 +214,22 @@ interface ZohoListResponse<T> {
 }
 
 /**
- * Busca una membresía por un criterio GROQ-like de Zoho y devuelve el primer
- * resultado parcial (o null si Zoho responde 204/sin datos).
+ * Busca membresías por un criterio GROQ-like de Zoho.
+ * Devuelve los registros parciales del listado (vacío si Zoho responde 204).
  */
-async function searchMembershipByCriteria(
+async function searchMembershipsByCriteria(
   token: string,
   criteria: string
-): Promise<ZohoMembership | null> {
+): Promise<ZohoMembership[]> {
   const searchUrl =
     `${ZOHO_CRM_DOMAIN}/crm/v6/Membresias/search` +
-    `?criteria=${encodeURIComponent(criteria)}`;
+    `?criteria=${encodeURIComponent(criteria)}&per_page=200`;
 
   const searchRes = await fetch(searchUrl, {
     headers: { Authorization: `Zoho-oauthtoken ${token}` },
   });
 
-  if (searchRes.status === 204) return null;
+  if (searchRes.status === 204) return [];
 
   if (!searchRes.ok) {
     const error = await searchRes.text();
@@ -239,7 +239,7 @@ async function searchMembershipByCriteria(
 
   const searchResult =
     (await searchRes.json()) as ZohoListResponse<ZohoMembership>;
-  return searchResult.data?.[0] ?? null;
+  return searchResult.data ?? [];
 }
 
 /** Trae un registro completo del módulo Membresias por ID (incluye subforms) */
@@ -260,73 +260,182 @@ async function getMembershipRecordById(
   return result.data?.[0] ?? null;
 }
 
+/** Trae un registro por ID sin repetir llamadas dentro de la misma consulta. */
+type RecordFetcher = (id: string) => Promise<ZohoMembership | null>;
+
 /**
- * Busca la membresía de un contacto por email.
+ * Sube por `Membresia_Padre` hasta la raíz de la red de membresías.
  *
- * En Zoho las membresías con email son registros "Hija" (una por ciclo);
- * el saldo consolidado del afiliado vive en la membresía "Padre"
- * (campo Puntos_Globales_Red = padre + todas las hijas).
+ * No basta con mirar si el registro tiene Padre: la búsqueda por correo puede
+ * devolver cualquier eslabón de la cadena —incluida la propia raíz— y hay
+ * redes de tres niveles (Padre → Hija → Nieta), así que se sube hasta que ya
+ * no haya a dónde.
+ */
+async function resolveNetworkRoot(
+  fetchRecord: RecordFetcher,
+  record: ZohoMembership
+): Promise<ZohoMembership> {
+  let current = record;
+  const visited = new Set<string>([current.id]);
+
+  while (current.Membresia_Padre?.id) {
+    const parentId = current.Membresia_Padre.id;
+    if (visited.has(parentId)) break; // ciclo en los datos: se corta aquí
+    visited.add(parentId);
+
+    const parent = await fetchRecord(parentId);
+    if (!parent) break;
+    current = parent;
+  }
+
+  return current;
+}
+
+/**
+ * Recorre la red hacia abajo desde la raíz, nivel a nivel.
+ *
+ * Zoho enlaza cada registro con sus hijas directas en
+ * `Membresias_Hijas_Relacionadas`; recorrerlo en anchura recoge también las
+ * nietas, que existen en el CRM aunque no sean la norma.
+ *
+ * Ese enlace no siempre está completo (hay ciclos que el CRM no listó en su
+ * Padre), así que quien llama debe unir el resultado con los registros que la
+ * búsqueda por correo encontró por su cuenta.
+ */
+async function collectNetworkRecords(
+  fetchRecord: RecordFetcher,
+  root: ZohoMembership
+): Promise<ZohoMembership[]> {
+  const byId = new Map<string, ZohoMembership>([[root.id, root]]);
+  let frontier = [root];
+
+  while (frontier.length > 0) {
+    const pending = [
+      ...new Set(
+        frontier
+          .flatMap((record) => record.Membresias_Hijas_Relacionadas ?? [])
+          .map((link) => link.Membresia_Hija_Lookup?.id)
+          .filter((id): id is string => Boolean(id))
+          .filter((id) => !byId.has(id))
+      ),
+    ];
+
+    if (pending.length === 0) break;
+
+    const children = (
+      await Promise.all(pending.map((id) => fetchRecord(id)))
+    ).filter((m): m is ZohoMembership => m !== null);
+
+    for (const child of children) byId.set(child.id, child);
+    frontier = children;
+  }
+
+  return [...byId.values()];
+}
+
+/**
+ * Busca la membresía de un contacto por email y devuelve su red consolidada.
+ *
+ * En Zoho el afiliado no es un registro sino una **red**: una membresía raíz
+ * ("Padre") y un registro por ciclo colgando de ella —a veces con otro ciclo
+ * colgando de un ciclo—. Cada registro solo conoce sus propios puntos en
+ * `Saldo_Puntos_Disponibles`.
+ *
+ * La red se arma por los dos extremos porque ninguno basta solo: la búsqueda
+ * por correo no encuentra las raíces (muchas no lo tienen) y el enlace de
+ * hijas de la raíz a veces deja registros fuera.
+ *
+ * El saldo que se le muestra al afiliado es la **suma de toda la red**, no un
+ * campo de Zoho:
+ *
+ * - `Saldo_Puntos_Disponibles` de un solo registro es un saldo parcial (era la
+ *   causa de que la web mostrara menos puntos de los que el afiliado tiene).
+ * - `Puntos_Globales_Red` de la raíz tampoco sirve: Zoho solo consolida en él
+ *   un nivel de hijas —deja fuera las nietas— y no lo recalcula al redimir,
+ *   así que unas veces se queda corto y otras largo.
  *
  * Devuelve una membresía con:
- * - Saldo_Puntos_Disponibles = saldo global de la red (del Padre)
- * - Puntos_Membresia = historial agregado (Padre + todas las Hijas)
- * - id = última hija activa (para asociar redenciones)
+ * - `Saldo_Puntos_Disponibles` = saldo sumado de toda la red
+ * - `Puntos_Membresia` = historial agregado de todos los registros
+ * - `redFifo` = registros con saldo, del más antiguo al más reciente
+ * - `id` = registro con los puntos más antiguos (destino FIFO por defecto)
  */
 export async function getMembershipByEmail(
   email: string
 ): Promise<ZohoMembership | null> {
   const token = await getZohoAccessToken();
 
-  // Paso 1: buscar por email para obtener una membresía hija.
+  // Una red se recorre por arriba y por abajo, y los caminos se cruzan: sin
+  // memoria, el mismo registro se pediría varias veces en una sola consulta.
+  const records = new Map<string, ZohoMembership | null>();
+  const fetchRecord: RecordFetcher = async (id) => {
+    const known = records.get(id);
+    if (known !== undefined) return known;
+    const record = await getMembershipRecordById(token, id);
+    records.set(id, record);
+    return record;
+  };
+
+  // Paso 1: todos los registros que llevan el correo del afiliado.
   // El email suele vivir en "Correo electrónico 1" (Correo_electr_nico_1),
   // pero algunos afiliados solo lo tienen en el "Nombre de Membresía" (Name)
   // —típicamente registros Padre—, así que se hace fallback a buscar por Name.
-  let partial = await searchMembershipByCriteria(
+  let encontradas = await searchMembershipsByCriteria(
     token,
     `(Correo_electr_nico_1:equals:${email})`
   );
-  if (!partial) {
-    partial = await searchMembershipByCriteria(
+  if (encontradas.length === 0) {
+    encontradas = await searchMembershipsByCriteria(
       token,
       `(Name:equals:${email})`
     );
-    if (partial) {
-      console.log(`[Zoho] Membresía encontrada por Name para: ${email}`);
+    if (encontradas.length > 0) {
+      console.log(`[Zoho] Membresías encontradas por Name para: ${email}`);
     }
   }
-  if (!partial) {
+  if (encontradas.length === 0) {
     console.log(`[Zoho] Membresía NO encontrada para: ${email}`);
     return null;
   }
 
-  console.log(`[Zoho] Membresía encontrada para: ${email} (ID: ${partial.id})`);
+  console.log(
+    `[Zoho] ${encontradas.length} membresía(s) encontradas para: ${email}`
+  );
 
-  // Paso 2: traer el registro completo por ID (incluye subform y lookup al Padre)
-  const child = (await getMembershipRecordById(token, partial.id)) ?? partial;
+  // Paso 2: traer cada una completa (el listado no incluye subformularios)
+  const semillas = (
+    await Promise.all(
+      encontradas.map(async (m) => (await fetchRecord(m.id)) ?? m)
+    )
+  ).filter((m): m is ZohoMembership => Boolean(m));
 
-  const parentId = child.Membresia_Padre?.id;
-  if (!parentId) {
-    // Registro sin Padre (membresía única): comportamiento original
-    return child;
+  // Paso 3: subir a la raíz de cada semilla y bajar por toda su red
+  const raices = new Map<string, ZohoMembership>();
+  for (const semilla of semillas) {
+    const raiz = await resolveNetworkRoot(fetchRecord, semilla);
+    if (!raices.has(raiz.id)) raices.set(raiz.id, raiz);
   }
 
-  // Paso 3: traer el Padre — tiene el saldo global y la lista de hijas
-  const parent = await getMembershipRecordById(token, parentId);
-  if (!parent) {
-    console.warn(`[Zoho] No se pudo traer membresía Padre ${parentId}, usando hija`);
-    return child;
+  const redPorId = new Map<string, ZohoMembership>();
+  for (const raiz of raices.values()) {
+    for (const record of await collectNetworkRecords(fetchRecord, raiz)) {
+      redPorId.set(record.id, record);
+    }
   }
 
-  // Paso 4: traer las demás hijas para consolidar el historial de puntos
-  const siblingIds = (parent.Membresias_Hijas_Relacionadas ?? [])
-    .map((h) => h.Membresia_Hija_Lookup?.id)
-    .filter((id): id is string => Boolean(id) && id !== child.id);
+  // Los registros que la raíz no listó entre sus hijas no pueden quedarse
+  // fuera del saldo: la búsqueda por correo ya los encontró.
+  for (const semilla of semillas) {
+    if (redPorId.has(semilla.id)) continue;
+    console.warn(
+      `[Zoho] ${semilla.Name ?? semilla.id} no aparece colgando de su raíz;` +
+        ` se agrega a la red de ${email}`
+    );
+    redPorId.set(semilla.id, semilla);
+  }
 
-  const siblings = (
-    await Promise.all(siblingIds.map((id) => getMembershipRecordById(token, id)))
-  ).filter((m): m is ZohoMembership => m !== null);
-
-  const registrosRed = [parent, child, ...siblings];
+  const registrosRed = [...redPorId.values()];
+  const raizPrincipal = await resolveNetworkRoot(fetchRecord, semillas[0]);
 
   const puntosConsolidados = registrosRed
     .flatMap((m) => m.Puntos_Membresia ?? [])
@@ -354,21 +463,26 @@ export async function getMembershipByEmail(
       (a.puntosMasAntiguos ?? "").localeCompare(b.puntosMasAntiguos ?? "")
     );
 
-  const saldoGlobal =
-    parent.Puntos_Globales_Red ?? parent.Saldo_Puntos_Disponibles;
+  const saldoGlobal = registrosRed.reduce(
+    (total, m) => total + (m.Saldo_Puntos_Disponibles ?? 0),
+    0
+  );
 
   console.log(
-    `[Zoho] Saldo global de red para ${email}: ${saldoGlobal} (Padre ${parent.id})`
+    `[Zoho] Saldo de red para ${email}: ${saldoGlobal} ` +
+      `(raíz ${raizPrincipal.id}, ${registrosRed.length} registros)`
   );
 
   return {
     // Registro con los puntos más antiguos (destino FIFO por defecto)
-    id: redFifo[0]?.id ?? parent.ID_Ultima_Hija_Activa ?? child.id,
-    Correo_electr_nico_1: child.Correo_electr_nico_1,
+    id: redFifo[0]?.id ?? raizPrincipal.ID_Ultima_Hija_Activa ?? semillas[0].id,
+    Correo_electr_nico_1:
+      semillas[0].Correo_electr_nico_1 ?? raizPrincipal.Correo_electr_nico_1,
     Saldo_Puntos_Disponibles: saldoGlobal,
-    Categor_a: parent.Categor_a ?? child.Categor_a,
-    Empresa_Membresia: parent.Empresa_Membresia ?? child.Empresa_Membresia,
-    Membresia_Padre: { name: parent.Name ?? "", id: parent.id },
+    Categor_a: raizPrincipal.Categor_a ?? semillas[0].Categor_a,
+    Empresa_Membresia:
+      raizPrincipal.Empresa_Membresia ?? semillas[0].Empresa_Membresia,
+    Membresia_Padre: { name: raizPrincipal.Name ?? "", id: raizPrincipal.id },
     Puntos_Membresia: puntosConsolidados,
     redFifo,
   };

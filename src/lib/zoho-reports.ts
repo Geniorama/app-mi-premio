@@ -433,17 +433,61 @@ function emailFromMembershipName(name?: string | null): string {
   return candidate.includes("@") ? candidate.toLowerCase() : "";
 }
 
-/** Raíz de la red: la Padre si el registro es Hija, o él mismo. */
-const rootIdOf = (m: MembershipRow): string => m.Membresia_Padre?.id ?? m.id;
+/**
+ * Índice `id de membresía → id de la raíz de su red`.
+ *
+ * La jerarquía de Zoho no siempre tiene dos niveles: hay ciclos colgados de
+ * otro ciclo (Padre → Hija → Nieta). Subir un solo escalón partía esas redes
+ * en dos filas del informe —el afiliado aparecía dos veces y sus puntos
+ * repartidos entre ambas—, así que se sube hasta la raíz.
+ *
+ * Si el Padre de un registro no está en el listado (dato roto en el CRM), ese
+ * registro hace de raíz de su propia red en vez de perderse.
+ */
+function rootIdMap(memberships: MembershipRow[]): Map<string, string> {
+  const byId = new Map(memberships.map((m) => [m.id, m]));
+  const roots = new Map<string, string>();
 
-/** Agrupa las membresías por red (Padre + sus Hijas). */
+  for (const membership of memberships) {
+    if (roots.has(membership.id)) continue;
+
+    const chain: string[] = [];
+    let current: MembershipRow = membership;
+    const visited = new Set<string>();
+
+    for (;;) {
+      chain.push(current.id);
+      visited.add(current.id);
+
+      const known = roots.get(current.id);
+      if (known) {
+        for (const id of chain) roots.set(id, known);
+        break;
+      }
+
+      const parentId = current.Membresia_Padre?.id;
+      const parent = parentId ? byId.get(parentId) : undefined;
+      if (!parent || visited.has(parent.id)) {
+        for (const id of chain) roots.set(id, current.id);
+        break;
+      }
+
+      current = parent;
+    }
+  }
+
+  return roots;
+}
+
+/** Agrupa las membresías por red (raíz + todos sus ciclos). */
 function groupByNetwork(
   memberships: MembershipRow[]
 ): Map<string, MembershipRow[]> {
+  const roots = rootIdMap(memberships);
   const groups = new Map<string, MembershipRow[]>();
 
   for (const membership of memberships) {
-    const rootId = rootIdOf(membership);
+    const rootId = roots.get(membership.id) ?? membership.id;
     const group = groups.get(rootId);
     if (group) group.push(membership);
     else groups.set(rootId, [membership]);
@@ -453,8 +497,13 @@ function groupByNetwork(
 }
 
 /**
- * Saldo autoritativo de cada red. `Puntos_Globales_Red` del Padre es la cifra
- * que Zoho consolida; si viene vacía se cae a la suma de saldos por registro.
+ * Saldo de cada red: la **suma** de los saldos de sus registros.
+ *
+ * No se usa `Puntos_Globales_Red` de la raíz aunque parezca la cifra oficial:
+ * Zoho solo consolida en ese campo un nivel de hijas —deja fuera las nietas— y
+ * no lo recalcula al redimir, así que unas veces se queda corto y otras largo.
+ * `Saldo_Puntos_Disponibles` de cada registro sí cuadra con su subformulario
+ * de puntos (entregados − redimidos − vencidos).
  *
  * Es el mismo criterio que usa `/api/user/membership` para el afiliado, así
  * que el panel y el perfil muestran siempre la misma cifra.
@@ -465,15 +514,12 @@ function networkBalances(
   const balances = new Map<string, number>();
 
   for (const [rootId, records] of groups) {
-    const root = records.find((record) => record.id === rootId) ?? records[0];
     balances.set(
       rootId,
-      root.Puntos_Globales_Red != null
-        ? num(root.Puntos_Globales_Red)
-        : records.reduce(
-            (total, record) => total + num(record.Saldo_Puntos_Disponibles),
-            0
-          )
+      records.reduce(
+        (total, record) => total + num(record.Saldo_Puntos_Disponibles),
+        0
+      )
     );
   }
 
@@ -699,9 +745,7 @@ export async function buildAffiliateReport(
   const balances = networkBalances(groups);
 
   // membershipId → rootId, para atribuir cada redención a su afiliado
-  const rootByMembershipId = new Map(
-    memberships.map((membership) => [membership.id, rootIdOf(membership)])
-  );
+  const rootByMembershipId = rootIdMap(memberships);
 
   // Redenciones agrupadas por afiliado
   const redemptionsByRoot = new Map<string, EnrichedRedemption[]>();
@@ -1011,6 +1055,7 @@ export async function listPointsLots(force = false): Promise<PointsLotRow[]> {
         }
       );
 
+      const roots = rootIdMap(memberships);
       const lots: PointsLotRow[] = [];
 
       for (const { membership, detail } of details) {
@@ -1035,7 +1080,7 @@ export async function listPointsLots(force = false): Promise<PointsLotRow[]> {
 
           lots.push({
             loteId: lot.id,
-            rootId: rootIdOf(membership),
+            rootId: roots.get(membership.id) ?? membership.id,
             membershipId: membership.id,
             membershipName: membership.Name ?? membership.id,
             email,
