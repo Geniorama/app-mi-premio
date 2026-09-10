@@ -4,7 +4,7 @@ Guía para el equipo que consulta los informes del programa de lealtad **Mi Prem
 (Germán Morales Hoteles). No necesitas conocimientos técnicos para usarlo.
 
 - **Dirección del panel:** `https://mipremiogermanmoraleshoteles.com/admin`
-- **Última actualización:** 4 de agosto de 2026
+- **Última actualización:** 9 de septiembre de 2026
 
 ---
 
@@ -98,7 +98,41 @@ La columna **Origen** distingue si el canje se hizo desde la web o directamente 
 creadas en el CRM no tienen bono asociado, porque esa información solo existe cuando el afiliado
 lo pide desde el sitio.
 
-### 3.3 Afiliados
+### 3.3 Puntos
+
+Responde a una sola pregunta: **de todo lo que se ha cargado, ¿dónde está?**
+
+| Tarjeta | Qué significa |
+|---|---|
+| **Cargado** | Todos los puntos que ha emitido el programa |
+| **Disponible** | Lo que sigue vivo y el afiliado aún puede gastar |
+| **Redimido** | Lo que ya se canjeó por bonos |
+| **Vencido** | Lo que caducó sin que nadie lo usara |
+
+Las tres últimas **suman exactamente la primera**. El panel lo comprueba en cada carga; si
+alguna vez no cuadrara, te lo diría en pantalla en vez de callarlo.
+
+Debajo hay dos cifras de gestión:
+
+- **Vence en menos de 90 días** — el saldo en riesgo ahora mismo. Es la señal de cuándo lanzar
+  una campaña de recordatorio; el detalle de a quién avisar está en *Puntos por vencer*.
+- **Consumo del programa** — qué porcentaje de lo cargado ya canjearon los afiliados.
+
+Y tres bloques más: el **valor cargado por mes** (pasa el cursor sobre una columna), el
+**detalle por mes** —de lo que se cargó en cada mes, cuánto sigue vivo y cuánto se perdió— y el
+reparto de **lotes por estado** tal y como están en el CRM.
+
+Con el selector **Meses en la serie** eliges si mirar los últimos 12, 24 o 36 meses.
+
+> **Cómo se reparten los meses.** Un lote suma en el mes en que **se cargó**. Si además caducó
+> sin usarse, resta en el mes en que **venció**, que casi nunca es el mismo. Por eso un mes
+> puede tener muchos puntos vencidos sin haber cargado ninguno.
+
+> **La primera carga tarda.** Este informe lee el detalle de cada membresía una por una. Después
+> queda guardado unos minutos y responde al instante. Lo comparte con *Hoteles* y *Puntos por
+> vencer*: si acabas de abrir uno de los tres, los otros dos van rápidos.
+
+### 3.4 Afiliados
 
 Una fila por afiliado, con sus puntos entregados, redimidos, saldo disponible, vencidos y su
 número de redenciones.
@@ -115,7 +149,7 @@ usa el informe de Comerciales.
 > por ciclo. El panel las agrupa y te muestra el total consolidado, que es la cifra que el
 > afiliado ve en su perfil.
 
-### Ver el sitio como lo ve un afiliado
+#### Ver el sitio como lo ve un afiliado
 
 El botón **Ver como**, al final de cada fila, abre el sitio tal y como lo ve esa persona: su
 saldo, su historial de puntos y su perfil. Sirve para resolver dudas de soporte sin pedirle
@@ -132,7 +166,7 @@ los 30 minutos.
 > quién. Es una herramienta de soporte, no de curiosidad: estás accediendo a datos personales de
 > un afiliado.
 
-### 3.3.b Comerciales
+### 3.5 Comerciales
 
 Una fila por comercial, con la cartera de afiliados que tiene a cargo: cuántos son, cuántos
 puntos se les entregaron, cuánto se ha redimido y qué saldo queda vivo.
@@ -183,7 +217,43 @@ que tengas a la vista.
 > personas que salieron del programa en el CRM pero conservan puntos: siguen contando porque su
 > saldo es real, pero ya no tienen propietario que los reclame.
 
-### 3.4 Puntos por vencer
+### 3.6 Hoteles
+
+Una fila por hotel del portafolio, con los puntos que ha emitido y qué ha pasado con ellos.
+
+| Columna | Qué significa |
+|---|---|
+| **Hotel** | Nombre del hotel; debajo, cuántos lotes emitió y a cuántos afiliados |
+| **Entregado** | Puntos que emitió el hotel, en pesos y en puntos |
+| **Redimido** | Cuánto de lo que emitió ya se gastó |
+| **Saldo vivo** | Lo que sigue disponible de esos puntos |
+| **Vencido** | Lo que caducó sin usarse |
+| **Participación** | Qué porcentaje del total del programa emitió este hotel |
+| **Última entrega** | Cuándo cargó puntos por última vez |
+
+Puedes ordenar por cualquiera de esas cifras, buscar un hotel por nombre y, con el filtro
+**Lotes sin hotel → Ocultar**, dejar fuera los que no identifican hotel. Arriba verás el gráfico
+**Valor entregado por hotel** con los diez primeros del listado, respetando el orden que hayas
+elegido.
+
+> **De dónde sale el hotel.** Los puntos se emiten contra una **orden de compra**, y el nombre
+> del hotel viene dentro de esa orden. El panel lo extrae de ahí, con el mismo criterio que ve
+> el afiliado en sus extractos. Es la única forma: no existe un campo de hotel en el CRM.
+
+> **Cuidado con "Redimido".** Los puntos no llevan etiqueta de qué hotel salieron: se gastan por
+> antigüedad, los más viejos primero. Así que esta columna significa *cuánto de lo que emitió
+> este hotel ya se consumió*, *no* "un afiliado canjeó este bono gracias a este hotel". Esa
+> trazabilidad no existe.
+
+> **"Sin hotel".** Son lotes cuya orden de compra no permite identificar el hotel. Al pie del
+> informe verás cuántos puntos están en esa situación. Ocúltalos con el filtro si quieres
+> comparar solo hoteles reales, pero recuerda que entonces los totales no suman el programa
+> entero.
+
+> **La primera carga tarda**, por lo mismo que *Puntos*: los dos leen el detalle de cada
+> membresía.
+
+### 3.7 Puntos por vencer
 
 Los puntos que caducan pronto, agrupados por cercanía al vencimiento y con el detalle de qué
 afiliado y qué lote.
@@ -197,14 +267,14 @@ caducaron.
 > primera carga puede tomar hasta un minuto. Después queda guardado unos minutos y responde al
 > instante.
 
-### 3.5 Descargar a Excel
+### 3.8 Descargar a Excel
 
 Cada informe tiene el botón **Descargar CSV**. Dos cosas importantes:
 
 - Descarga **todo lo que coincide con tus filtros**, no solo la página que estás viendo.
 - El archivo está preparado para abrirse en Excel en español, con las columnas ya separadas.
 
-### 3.6 Paginación
+### 3.9 Paginación
 
 Las tablas muestran 25 filas por página. Abajo puedes cambiar a 50, 100 o 200 y moverte entre
 páginas. Al cambiar un filtro vuelves automáticamente a la primera página.
@@ -275,6 +345,11 @@ desde la web.
 **¿Por qué "Puntos entregados" no cuadra exactamente con saldo más redimidos?**
 Porque hay puntos vencidos y lotes anulados de por medio. Las cifras de saldo del panel son las
 mismas que Zoho consolida y que el afiliado ve en su perfil.
+
+**Puntos, Hoteles o Puntos por vencer tardan mucho en abrir.**
+Los tres leen el detalle de cada membresía una por una, y eso lleva unos segundos. Comparten esa
+lectura: abierto uno, los otros dos van rápidos. Después queda guardada unos minutos, así que
+normalmente los encontrarás ya cargados.
 
 **Cambié algo en Zoho y no aparece.**
 Pulsa **Actualizar datos**. Si sigue sin verse, puede que el cambio esté en un campo que el panel
