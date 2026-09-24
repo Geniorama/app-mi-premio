@@ -217,6 +217,8 @@ export interface OwnerRow {
   conSaldo: number;
   conRedenciones: number;
   empresas: number;
+  /** Empresas que lleva, con cuántos afiliados tiene en cada una */
+  listaEmpresas: Array<{ nombre: string; afiliados: number }>;
   puntosEntregados: number;
   puntosRedimidos: number;
   saldoDisponible: number;
@@ -266,6 +268,10 @@ export interface OwnersData {
   serieAltas: Array<{ mes: string; altas: number }>;
   /** El rango realmente aplicado, tal y como lo entendió el servidor */
   rango: { desde: string | null; hasta: string | null };
+  /** Empresa filtrada, o null si se ven todas */
+  empresa: string | null;
+  /** Todas las empresas del padrón, para el desplegable del filtro */
+  empresasDisponibles: string[];
   padron: PadronStatus;
 }
 

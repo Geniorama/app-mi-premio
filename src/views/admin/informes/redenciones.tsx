@@ -8,8 +8,11 @@ import {
   StatusPill,
   statusLabel,
   Field,
+  FilterGrid,
+  ActiveFilters,
   ExportButton,
-  Spinner,
+  ReportSkeleton,
+  BusyArea,
   ErrorNote,
   Pagination,
   formatNumber,
@@ -29,16 +32,18 @@ import {
   type RedemptionRow,
 } from "./shared";
 
+const FILTROS_INICIALES = {
+  from: "",
+  to: "",
+  estado: "",
+  origen: "",
+  q: "",
+};
+
 export default function RedencionesSection() {
   const refreshToken = useRefreshToken();
 
-  const [filters, setFilters] = useState({
-    from: "",
-    to: "",
-    estado: "",
-    origen: "",
-    q: "",
-  });
+  const [filters, setFilters] = useState(FILTROS_INICIALES);
   const [search, setSearch] = useState("");
   const pagination = usePagination();
   const { reset } = pagination;
@@ -62,6 +67,12 @@ export default function RedencionesSection() {
   const applyFilters = (next: typeof filters) => {
     setFilters(next);
     reset();
+  };
+
+  const activos = Object.values(filters).filter(Boolean).length;
+  const limpiarFiltros = () => {
+    setSearch("");
+    applyFilters(FILTROS_INICIALES);
   };
 
   // La búsqueda se aplica con retardo para no consultar en cada tecla
@@ -147,33 +158,43 @@ export default function RedencionesSection() {
     },
   ];
 
+  // Primera carga: esqueleto en lugar de filtros, para que nadie los use
+  // antes de que lleguen los datos y sus opciones.
+  if (loading && !data) return <ReportSkeleton filters={5} />;
+
   return (
     <div className="flex flex-col gap-6">
       <Panel
         title="Filtros"
         actions={
-          <ExportButton href={csvHref("/api/admin/reports/redemptions", filterQuery)} />
+          <>
+            <ActiveFilters count={activos} onClear={limpiarFiltros} />
+            <ExportButton href={csvHref("/api/admin/reports/redemptions", filterQuery)} />
+          </>
         }
       >
-        <div className="flex flex-wrap gap-3">
-          <Field label="Desde">
+        <FilterGrid>
+          <Field label="Desde" active={Boolean(filters.from)}>
             <input
               type="date"
+              disabled={loading}
               className={inputClass}
               value={filters.from}
               onChange={(event) => applyFilters({ ...filters, from: event.target.value })}
             />
           </Field>
-          <Field label="Hasta">
+          <Field label="Hasta" active={Boolean(filters.to)}>
             <input
               type="date"
+              disabled={loading}
               className={inputClass}
               value={filters.to}
               onChange={(event) => applyFilters({ ...filters, to: event.target.value })}
             />
           </Field>
-          <Field label="Estado">
+          <Field label="Estado" active={Boolean(filters.estado)}>
             <select
+              disabled={loading}
               className={inputClass}
               value={filters.estado}
               onChange={(event) => applyFilters({ ...filters, estado: event.target.value })}
@@ -188,8 +209,9 @@ export default function RedencionesSection() {
               )}
             </select>
           </Field>
-          <Field label="Origen">
+          <Field label="Origen" active={Boolean(filters.origen)}>
             <select
+              disabled={loading}
               className={inputClass}
               value={filters.origen}
               onChange={(event) => applyFilters({ ...filters, origen: event.target.value })}
@@ -199,23 +221,23 @@ export default function RedencionesSection() {
               <option value="crm">Desde el CRM</option>
             </select>
           </Field>
-          <Field label="Buscar">
+          <Field label="Buscar" wide active={Boolean(search)}>
             <input
               type="search"
               placeholder="Afiliado, correo o bono"
-              className={`${inputClass} min-w-56`}
+              className={inputClass}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
           </Field>
-        </div>
+        </FilterGrid>
       </Panel>
 
       {error && <ErrorNote message={error} />}
-      {loading && !data && <Spinner />}
 
       {data && (
-        <>
+        <BusyArea busy={loading}>
+          <ActiveFilters count={activos} onClear={limpiarFiltros} variant="banner" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatTile
               label="Redenciones"
@@ -256,7 +278,7 @@ export default function RedencionesSection() {
               itemLabel="redenciones"
             />
           </Panel>
-        </>
+        </BusyArea>
       )}
     </div>
   );

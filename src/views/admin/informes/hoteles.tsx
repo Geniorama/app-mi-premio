@@ -6,8 +6,11 @@ import {
   Panel,
   DataTable,
   Field,
+  FilterGrid,
+  ActiveFilters,
   ExportButton,
-  Spinner,
+  ReportSkeleton,
+  BusyArea,
   ErrorNote,
   Pagination,
   formatNumber,
@@ -37,14 +40,16 @@ import {
  * emiten contra la orden de compra de un hotel y es ahí donde aparece su
  * nombre. Por eso el informe habla de puntos entregados, no de canjes.
  */
+const FILTROS_INICIALES = {
+  orden: "puntosEntregados",
+  sinHotel: "1",
+  q: "",
+};
+
 export default function HotelesSection() {
   const refreshToken = useRefreshToken();
 
-  const [filters, setFilters] = useState({
-    orden: "puntosEntregados",
-    sinHotel: "1",
-    q: "",
-  });
+  const [filters, setFilters] = useState(FILTROS_INICIALES);
   const [search, setSearch] = useState("");
   const pagination = usePagination();
   const { reset } = pagination;
@@ -68,6 +73,13 @@ export default function HotelesSection() {
   const applyFilters = (next: typeof filters) => {
     setFilters(next);
     reset();
+  };
+
+  // El orden no recorta resultados, así que no cuenta como filtro ni se limpia
+  const activos = [filters.sinHotel !== FILTROS_INICIALES.sinHotel, filters.q].filter(Boolean).length;
+  const limpiarFiltros = () => {
+    setSearch("");
+    applyFilters({ ...FILTROS_INICIALES, orden: filters.orden });
   };
 
   // La búsqueda se aplica con retardo para no consultar en cada tecla
@@ -141,15 +153,25 @@ export default function HotelesSection() {
     )} afiliados`,
   }));
 
+  // Primera carga: esqueleto en lugar de filtros, para que nadie los use
+  // antes de que lleguen los datos y sus opciones.
+  if (loading && !data) return <ReportSkeleton filters={3} />;
+
   return (
     <div className="flex flex-col gap-6">
       <Panel
         title="Filtros"
-        actions={<ExportButton href={csvHref("/api/admin/reports/hotels", filterQuery)} />}
+        actions={
+          <>
+            <ActiveFilters count={activos} onClear={limpiarFiltros} />
+            <ExportButton href={csvHref("/api/admin/reports/hotels", filterQuery)} />
+          </>
+        }
       >
-        <div className="flex flex-wrap gap-3">
+        <FilterGrid>
           <Field label="Ordenar por">
             <select
+              disabled={loading}
               className={inputClass}
               value={filters.orden}
               onChange={(event) => applyFilters({ ...filters, orden: event.target.value })}
@@ -161,8 +183,9 @@ export default function HotelesSection() {
               <option value="hotel">Nombre del hotel</option>
             </select>
           </Field>
-          <Field label="Lotes sin hotel">
+          <Field label="Lotes sin hotel" active={filters.sinHotel !== FILTROS_INICIALES.sinHotel}>
             <select
+              disabled={loading}
               className={inputClass}
               value={filters.sinHotel}
               onChange={(event) => applyFilters({ ...filters, sinHotel: event.target.value })}
@@ -171,23 +194,23 @@ export default function HotelesSection() {
               <option value="0">Ocultar</option>
             </select>
           </Field>
-          <Field label="Buscar">
+          <Field label="Buscar" wide active={Boolean(search)}>
             <input
               type="search"
               placeholder="Nombre del hotel"
-              className={`${inputClass} min-w-56`}
+              className={inputClass}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
           </Field>
-        </div>
+        </FilterGrid>
       </Panel>
 
       {error && <ErrorNote message={error} />}
-      {loading && !data && <Spinner />}
 
       {data && (
-        <>
+        <BusyArea busy={loading}>
+          <ActiveFilters count={activos} onClear={limpiarFiltros} variant="banner" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatTile
               label="Hoteles"
@@ -237,7 +260,7 @@ export default function HotelesSection() {
             gastó, no con qué bono. Los valores en pesos usan la equivalencia del
             programa: 1 punto = {formatCurrency(COP_PER_POINT)}.
           </p>
-        </>
+        </BusyArea>
       )}
     </div>
   );

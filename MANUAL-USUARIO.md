@@ -141,9 +141,13 @@ Puedes buscar por nombre, correo o número de membresía, filtrar por tipo de af
 por **comercial** y mostrar solo quienes tienen saldo. **Pulsa el encabezado de una columna para
 ordenar** por ella.
 
-La columna **Comercial** te dice quién atiende a cada afiliado. Si buscas la cartera completa de
-una persona, el filtro **Comercial** te la deja sola en pantalla; para ver los totales de todos,
-usa el informe de Comerciales.
+La columna **Empresa** muestra a qué empresa pertenece cada afiliado, y la columna **Comercial**
+quién lo atiende. Si buscas la cartera completa de una persona, el filtro **Comercial** te la
+deja sola en pantalla; para ver los totales de todos, usa el informe de Comerciales.
+
+Los filtros se aplican a **toda la sección**: las tarjetas, la tabla de afiliados y los bloques
+**Con membresía frente a sin membresía** y **Agencias frente a corporativos**. Sin filtros, esos
+bloques muestran el padrón completo.
 
 #### Agencias y corporativos
 
@@ -190,6 +194,7 @@ puntos se les entregaron, cuánto se ha redimido y qué saldo queda vivo.
 
 | Columna | Qué significa |
 |---|---|
+| **Empresas** | Qué empresas lleva y cuántos afiliados tiene en cada una (las tres primeras a la vista; **Ver más** despliega el resto) |
 | **Afiliados** | Cuántos tiene asignados, y cuántos de ellos ya tienen membresía abierta |
 | **Entregado** | Puntos que han recibido sus afiliados, en pesos y en puntos |
 | **Redimido** | Cuánto de eso ya se canjeó por bonos |
@@ -199,8 +204,12 @@ puntos se les entregaron, cuánto se ha redimido y qué saldo queda vivo.
 | **Saldo** | Puntos vivos que su cartera todavía puede gastar |
 | **Por vencer** | De ese saldo, cuánto caduca pronto |
 
-Puedes ordenar por cualquiera de esas cifras, buscar por nombre o correo, y ocultar el grupo
-*Sin comercial asignado*.
+Puedes ordenar por cualquiera de esas cifras, buscar por nombre, correo o empresa, y ocultar el
+grupo *Sin comercial asignado*.
+
+El filtro **Empresa** deja solo los comerciales que tienen afiliados en esa empresa, y las cifras
+de cada fila pasan a ser únicamente las de esa empresa (no la cartera entera del comercial). El
+CSV incluye la columna **Empresas (afiliados)** con la lista completa de cada comercial.
 
 #### Cuántos afiliados entran en un periodo
 

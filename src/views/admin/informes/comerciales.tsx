@@ -6,8 +6,11 @@ import {
   Panel,
   DataTable,
   Field,
+  FilterGrid,
+  ActiveFilters,
   ExportButton,
-  Spinner,
+  ReportSkeleton,
+  BusyArea,
   ErrorNote,
   Pagination,
   formatNumber,
@@ -85,6 +88,20 @@ const PERIODOS: Record<string, { label: string; desde: string; hasta: string }> 
   historico: { label: "Todo el histórico", desde: "", hasta: "" },
 };
 
+const PERIODO_POR_DEFECTO = "doceMeses";
+
+const FILTROS_INICIALES = {
+  orden: "puntosEntregados",
+  sinComercial: "1",
+  q: "",
+  empresa: "",
+  desde: PERIODOS[PERIODO_POR_DEFECTO].desde,
+  hasta: PERIODOS[PERIODO_POR_DEFECTO].hasta,
+};
+
+/** Empresas que se ven en la fila sin desplegar el resto. */
+const EMPRESAS_VISIBLES = 3;
+
 /**
  * Gestión por comercial.
  *
@@ -96,14 +113,8 @@ const PERIODOS: Record<string, { label: string; desde: string; hasta: string }> 
 export default function ComercialesSection() {
   const refreshToken = useRefreshToken();
 
-  const [filters, setFilters] = useState({
-    orden: "puntosEntregados",
-    sinComercial: "1",
-    q: "",
-    desde: PERIODOS.doceMeses.desde,
-    hasta: PERIODOS.doceMeses.hasta,
-  });
-  const [periodo, setPeriodo] = useState("doceMeses");
+  const [filters, setFilters] = useState(FILTROS_INICIALES);
+  const [periodo, setPeriodo] = useState(PERIODO_POR_DEFECTO);
   const [search, setSearch] = useState("");
   const pagination = usePagination();
   const { reset } = pagination;
@@ -127,6 +138,16 @@ export default function ComercialesSection() {
   const applyFilters = (next: typeof filters) => {
     setFilters(next);
     reset();
+  };
+
+  // El orden no recorta resultados, así que no cuenta como filtro ni se limpia
+  const sinComercialActivo = filters.sinComercial !== FILTROS_INICIALES.sinComercial;
+  const periodoActivo = periodo !== PERIODO_POR_DEFECTO;
+  const activos = [sinComercialActivo, filters.empresa, filters.q, periodoActivo].filter(Boolean).length;
+  const limpiarFiltros = () => {
+    setSearch("");
+    setPeriodo(PERIODO_POR_DEFECTO);
+    applyFilters({ ...FILTROS_INICIALES, orden: filters.orden });
   };
 
   /** Un preset fija el rango; "personalizado" deja los campos al usuario. */
@@ -167,6 +188,41 @@ export default function ComercialesSection() {
           </p>
         </div>
       ),
+    },
+    {
+      key: "empresas",
+      header: "Empresas",
+      render: (row) => {
+        if (row.listaEmpresas.length === 0) {
+          return <span className="text-xs text-[#898781]">Sin empresa en el CRM</span>;
+        }
+        const visibles = row.listaEmpresas.slice(0, EMPRESAS_VISIBLES);
+        const resto = row.listaEmpresas.slice(EMPRESAS_VISIBLES);
+        const item = (empresa: OwnerRow["listaEmpresas"][number]) => (
+          <li key={empresa.nombre} className="flex justify-between gap-2">
+            <span className="truncate" title={empresa.nombre}>
+              {empresa.nombre}
+            </span>
+            <span className="shrink-0 text-[#898781]">{formatNumber(empresa.afiliados)}</span>
+          </li>
+        );
+        return (
+          <div className="w-64 text-xs text-[#52514e]">
+            <p className="mb-1 font-semibold text-[#0b0b0b]">
+              {formatNumber(row.empresas)} {row.empresas === 1 ? "empresa" : "empresas"}
+            </p>
+            <ul className="flex flex-col gap-0.5">{visibles.map(item)}</ul>
+            {resto.length > 0 && (
+              <details className="mt-1">
+                <summary className="cursor-pointer text-custom-green">
+                  Ver {formatNumber(resto.length)} más
+                </summary>
+                <ul className="mt-0.5 flex flex-col gap-0.5">{resto.map(item)}</ul>
+              </details>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "afiliados",
@@ -281,15 +337,27 @@ export default function ComercialesSection() {
     ).toFixed(1)} % redimido`,
   }));
 
+  // Primera carga: esqueleto en lugar de filtros, para que nadie elija sobre
+  // desplegables todavía vacíos (la lista de empresas llega con los datos).
+  if (loading && !data) {
+    return <ReportSkeleton filters={4} tiles={4} rows={8} />;
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <Panel
         title="Filtros"
-        actions={<ExportButton href={csvHref("/api/admin/reports/owners", filterQuery)} />}
+        actions={
+          <>
+            <ActiveFilters count={activos} onClear={limpiarFiltros} />
+            <ExportButton href={csvHref("/api/admin/reports/owners", filterQuery)} />
+          </>
+        }
       >
-        <div className="flex flex-wrap gap-3">
+        <FilterGrid>
           <Field label="Ordenar por">
             <select
+              disabled={loading}
               className={inputClass}
               value={filters.orden}
               onChange={(event) => applyFilters({ ...filters, orden: event.target.value })}
@@ -304,8 +372,9 @@ export default function ComercialesSection() {
               <option value="comercial">Nombre del comercial</option>
             </select>
           </Field>
-          <Field label="Sin comercial asignado">
+          <Field label="Sin comercial asignado" active={sinComercialActivo}>
             <select
+              disabled={loading}
               className={inputClass}
               value={filters.sinComercial}
               onChange={(event) =>
@@ -316,49 +385,69 @@ export default function ComercialesSection() {
               <option value="0">Ocultar</option>
             </select>
           </Field>
-          <Field label="Buscar">
+          <Field label="Empresa" wide active={Boolean(filters.empresa)}>
+            <select
+              disabled={loading}
+              className={inputClass}
+              value={filters.empresa}
+              onChange={(event) => applyFilters({ ...filters, empresa: event.target.value })}
+            >
+              <option value="">Todas las empresas</option>
+              {(data?.empresasDisponibles ?? []).map((empresa) => (
+                <option key={empresa} value={empresa}>
+                  {empresa}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Buscar" wide active={Boolean(search)}>
             <input
               type="search"
-              placeholder="Nombre o correo del comercial"
-              className={`${inputClass} min-w-56`}
+              placeholder="Comercial, correo o empresa"
+              className={inputClass}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
           </Field>
-        </div>
+        </FilterGrid>
 
-        <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-black/10 pt-4">
-          <Field label="Periodo de altas">
-            <select
-              className={inputClass}
-              value={periodo}
-              onChange={(event) => applyPeriodo(event.target.value)}
-            >
-              {Object.entries(PERIODOS).map(([clave, preset]) => (
-                <option key={clave} value={clave}>
-                  {preset.label}
-                </option>
-              ))}
-              <option value="personalizado">Rango personalizado</option>
-            </select>
-          </Field>
-          <Field label="Desde">
-            <input
-              type="date"
-              className={inputClass}
-              value={filters.desde}
-              onChange={(event) => applyFecha("desde", event.target.value)}
-            />
-          </Field>
-          <Field label="Hasta">
-            <input
-              type="date"
-              className={inputClass}
-              value={filters.hasta}
-              onChange={(event) => applyFecha("hasta", event.target.value)}
-            />
-          </Field>
-          <p className="h-9 max-w-80 self-end text-xs leading-tight text-[#52514e]">
+        <div className="mt-4 border-t border-black/10 pt-4">
+          <FilterGrid>
+            <Field label="Periodo de altas" active={periodoActivo}>
+              <select
+                disabled={loading}
+                className={inputClass}
+                value={periodo}
+                onChange={(event) => applyPeriodo(event.target.value)}
+              >
+                {Object.entries(PERIODOS).map(([clave, preset]) => (
+                  <option key={clave} value={clave}>
+                    {preset.label}
+                  </option>
+                ))}
+                <option value="personalizado">Rango personalizado</option>
+              </select>
+            </Field>
+            <Field label="Desde" active={periodo === "personalizado"}>
+              <input
+                type="date"
+                disabled={loading}
+                className={inputClass}
+                value={filters.desde}
+                onChange={(event) => applyFecha("desde", event.target.value)}
+              />
+            </Field>
+            <Field label="Hasta" active={periodo === "personalizado"}>
+              <input
+                type="date"
+                disabled={loading}
+                className={inputClass}
+                value={filters.hasta}
+                onChange={(event) => applyFecha("hasta", event.target.value)}
+              />
+            </Field>
+          </FilterGrid>
+          <p className="mt-2 text-xs text-[#52514e]">
             Un afiliado cuenta como alta el mes en que recibió sus primeros
             puntos. El periodo solo afecta a la columna <strong>Altas</strong>;
             el resto de cifras son del histórico.
@@ -367,10 +456,10 @@ export default function ComercialesSection() {
       </Panel>
 
       {error && <ErrorNote message={error} />}
-      {loading && !data && <Spinner />}
 
       {data && (
-        <>
+        <BusyArea busy={loading}>
+          <ActiveFilters count={activos} onClear={limpiarFiltros} variant="banner" />
           {!data.padron.disponible && (
             <ErrorNote message="No se pudo leer el módulo Contacts de Zoho: sin él no hay propietarios que agrupar y todo cae en «sin comercial asignado». Vuelve a intentarlo en unos minutos." />
           )}
@@ -431,7 +520,11 @@ export default function ComercialesSection() {
 
           <Panel
             title="Detalle por comercial"
-            description={`${formatNumber(data.pagination.total)} comerciales`}
+            description={
+              data.empresa
+                ? `${formatNumber(data.pagination.total)} comerciales con afiliados en ${data.empresa}. Las cifras de cada fila son solo de esa empresa.`
+                : `${formatNumber(data.pagination.total)} comerciales`
+            }
           >
             <DataTable
               columns={columns}
@@ -479,7 +572,7 @@ export default function ComercialesSection() {
             El minigráfico de cada fila usa su propia escala: sirve para ver la forma de
             un comercial en el tiempo, no para compararlo en altura con otro.
           </p>
-        </>
+        </BusyArea>
       )}
     </div>
   );

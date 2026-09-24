@@ -6,8 +6,12 @@ import {
   Panel,
   DataTable,
   Field,
+  FilterGrid,
+  CheckField,
+  ActiveFilters,
   ExportButton,
-  Spinner,
+  ReportSkeleton,
+  BusyArea,
   ErrorNote,
   Pagination,
   formatNumber,
@@ -144,23 +148,29 @@ export default function AfiliadosSection() {
       header: "Sector",
       sortKey: "sector",
       render: (row) => (
-        <div className="max-w-48">
-          <span
-            className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${
-              row.sector === "Agencia"
-                ? "bg-custom-green/10 text-custom-green"
-                : "bg-black/[0.06] text-[#52514e]"
-            }`}
-          >
-            {row.sector}
-          </span>
-          {row.empresa && (
-            <p className="truncate text-xs text-[#52514e]" title={row.empresa}>
-              {row.empresa}
-            </p>
-          )}
-        </div>
+        <span
+          className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${
+            row.sector === "Agencia"
+              ? "bg-custom-green/10 text-custom-green"
+              : "bg-black/[0.06] text-[#52514e]"
+          }`}
+        >
+          {row.sector}
+        </span>
       ),
+    },
+    {
+      key: "empresa",
+      header: "Empresa",
+      sortKey: "empresa",
+      render: (row) =>
+        row.empresa ? (
+          <p className="max-w-56 truncate text-[#0b0b0b]" title={row.empresa}>
+            {row.empresa}
+          </p>
+        ) : (
+          <span className="text-xs text-[#898781]">Sin empresa</span>
+        ),
     },
     {
       key: "comercial",
@@ -177,11 +187,6 @@ export default function AfiliadosSection() {
         ) : (
           <span className="text-xs text-[#898781]">Sin asignar</span>
         ),
-    },
-    {
-      key: "tipoAfiliado",
-      header: "Tipo",
-      render: (row) => row.tipoAfiliado || "—",
     },
     {
       key: "puntosEntregados",
@@ -257,24 +262,50 @@ export default function AfiliadosSection() {
     },
   ];
 
+  // Con algún filtro activo, los cortes de la sección hablan de lo filtrado
+  const activos = [query_, tipo, sector, comercial, membresia, conSaldo].filter(Boolean).length;
+  const filtrado = activos > 0;
+  const base = filtrado ? "de lo filtrado" : "del padrón";
+
+  const limpiarFiltros = () => {
+    setSearch("");
+    setQuery("");
+    setTipo("");
+    setSector("");
+    setComercial("");
+    setMembresia("");
+    setConSaldo(false);
+    reset();
+  };
+
+  // Primera carga: esqueleto en lugar de filtros, para que nadie los use
+  // antes de que lleguen los datos y sus opciones.
+  if (loading && !data) return <ReportSkeleton filters={6} />;
+
   return (
     <div className="flex flex-col gap-6">
       <Panel
         title="Filtros"
-        actions={<ExportButton href={csvHref("/api/admin/reports/affiliates", filterQuery)} />}
+        actions={
+          <>
+            <ActiveFilters count={activos} onClear={limpiarFiltros} />
+            <ExportButton href={csvHref("/api/admin/reports/affiliates", filterQuery)} />
+          </>
+        }
       >
-        <div className="flex flex-wrap items-end gap-3">
-          <Field label="Buscar">
+        <FilterGrid>
+          <Field label="Buscar" wide active={Boolean(search)}>
             <input
               type="search"
               placeholder="Nombre, correo o No. de membresía"
-              className={`${inputClass} min-w-64`}
+              className={inputClass}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
           </Field>
-          <Field label="Tipo de afiliado">
+          <Field label="Tipo de afiliado" active={Boolean(tipo)}>
             <select
+              disabled={loading}
               className={inputClass}
               value={tipo}
               onChange={(event) => {
@@ -290,8 +321,9 @@ export default function AfiliadosSection() {
               ))}
             </select>
           </Field>
-          <Field label="Sector">
+          <Field label="Sector" active={Boolean(sector)}>
             <select
+              disabled={loading}
               className={inputClass}
               value={sector}
               onChange={(event) => {
@@ -304,9 +336,10 @@ export default function AfiliadosSection() {
               <option value="Corporativo">Corporativo</option>
             </select>
           </Field>
-          <Field label="Comercial">
+          <Field label="Comercial" wide active={Boolean(comercial)}>
             <select
-              className={`${inputClass} max-w-56`}
+              disabled={loading}
+              className={inputClass}
               value={comercial}
               onChange={(event) => {
                 setComercial(event.target.value);
@@ -322,8 +355,9 @@ export default function AfiliadosSection() {
               <option value="sin">Sin comercial asignado</option>
             </select>
           </Field>
-          <Field label="Membresía">
+          <Field label="Membresía" active={Boolean(membresia)}>
             <select
+              disabled={loading}
               className={inputClass}
               value={membresia}
               onChange={(event) => {
@@ -336,27 +370,24 @@ export default function AfiliadosSection() {
               <option value="sin">Solo sin membresía</option>
             </select>
           </Field>
-          <label className="flex h-9 cursor-pointer items-center gap-2 text-sm text-[#52514e]">
-            <input
-              type="checkbox"
-              checked={conSaldo}
-              onChange={(event) => {
-                setConSaldo(event.target.checked);
-                reset();
-              }}
-              className="size-4 accent-[#417D30]"
-            />
-            Solo con saldo disponible
-          </label>
-        </div>
+          <CheckField
+            label="Solo con saldo disponible"
+            disabled={loading}
+            checked={conSaldo}
+            onChange={(checked) => {
+              setConSaldo(checked);
+              reset();
+            }}
+          />
+        </FilterGrid>
       </Panel>
 
       {error && <ErrorNote message={error} />}
       {previewError && <ErrorNote message={previewError} />}
-      {loading && !data && <Spinner />}
 
       {data && (
-        <>
+        <BusyArea busy={loading}>
+          <ActiveFilters count={activos} onClear={limpiarFiltros} variant="banner" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
             <StatTile
               label="Afiliados"
@@ -386,7 +417,7 @@ export default function AfiliadosSection() {
               title="Con membresía frente a sin membresía"
               description={`${formatNumber(
                 data.padron.contactos
-              )} afiliados activos en el CRM. Sin membresía = afiliado registrado que todavía no ha recibido puntos.`}
+              )} afiliados activos en el CRM${filtrado ? "; las cifras son solo de lo filtrado" : ""}. Sin membresía = afiliado registrado que todavía no ha recibido puntos.`}
             >
               <DataTable
                 rows={data.comparativo}
@@ -407,7 +438,7 @@ export default function AfiliadosSection() {
                       <div>
                         <p className="font-semibold">{formatNumber(row.afiliados)}</p>
                         <p className="text-xs font-normal text-[#52514e]">
-                          {(row.participacion * 100).toFixed(1)} % del padrón
+                          {(row.participacion * 100).toFixed(1)} % {base}
                         </p>
                       </div>
                     ),
@@ -465,7 +496,7 @@ export default function AfiliadosSection() {
 
           <Panel
             title="Agencias frente a corporativos"
-            description="Segmento del padrón completo, al margen de los filtros. El sector se deduce del nombre de la empresa."
+            description={`${filtrado ? "Con los filtros aplicados." : "Padrón completo."} El sector se deduce del nombre de la empresa.`}
           >
             <DataTable
               rows={data.porSector}
@@ -486,7 +517,7 @@ export default function AfiliadosSection() {
                     <div>
                       <p className="font-semibold">{formatNumber(row.afiliados)}</p>
                       <p className="text-xs font-normal text-[#52514e]">
-                        {(row.participacion * 100).toFixed(1)} % del padrón
+                        {(row.participacion * 100).toFixed(1)} % {base}
                       </p>
                     </div>
                   ),
@@ -564,7 +595,7 @@ export default function AfiliadosSection() {
               itemLabel="afiliados"
             />
           </Panel>
-        </>
+        </BusyArea>
       )}
     </div>
   );

@@ -57,6 +57,8 @@ interface OwnerRow {
   conSaldo: number;
   conRedenciones: number;
   empresas: number;
+  /** Empresas que lleva, con cuántos afiliados tiene en cada una (de más a menos) */
+  listaEmpresas: EmpresaDeComercial[];
   puntosEntregados: number;
   puntosRedimidos: number;
   saldoDisponible: number;
@@ -84,6 +86,22 @@ interface OwnerRow {
   tasaActivacion: number;
   ultimaRedencion: string | null;
   ultimaActividad: string | null;
+}
+
+interface EmpresaDeComercial {
+  nombre: string;
+  afiliados: number;
+}
+
+/** Empresas de un grupo de afiliados, de la que más afiliados aporta a la que menos. */
+function empresasDe(rows: AffiliateReportRow[]): EmpresaDeComercial[] {
+  const conteo = new Map<string, number>();
+  for (const row of rows) {
+    if (row.empresa) conteo.set(row.empresa, (conteo.get(row.empresa) ?? 0) + 1);
+  }
+  return [...conteo]
+    .map(([nombre, afiliados]) => ({ nombre, afiliados }))
+    .sort((a, b) => b.afiliados - a.afiliados || a.nombre.localeCompare(b.nombre, "es"));
 }
 
 const sum = (rows: AffiliateReportRow[], pick: (row: AffiliateReportRow) => number) =>
@@ -124,9 +142,23 @@ export async function GET(request: NextRequest) {
     const meses = lastMonths(SERIE_MESES);
     const indicePorMes = new Map(meses.map((mes, index) => [mes, index]));
 
+    // Opciones del desplegable: todas las empresas del padrón, al margen del
+    // filtro, para que elegir una no haga desaparecer las demás de la lista.
+    const empresasDisponibles = [
+      ...new Set(report.affiliates.map((row) => row.empresa).filter(Boolean)),
+    ].sort((a, b) => a.localeCompare(b, "es"));
+
+    // El filtro de empresa actúa sobre los afiliados, antes de agrupar: así
+    // cada comercial muestra solo lo que lleva en esa empresa, no su cartera
+    // entera, y desaparecen los que no tienen a nadie en ella.
+    const empresa = params.get("empresa") || null;
+    const afiliados = empresa
+      ? report.affiliates.filter((row) => row.empresa === empresa)
+      : report.affiliates;
+
     // ------------------------------------------------------------ agregación
     const byOwner = new Map<string, AffiliateReportRow[]>();
-    for (const affiliate of report.affiliates) {
+    for (const affiliate of afiliados) {
       // La clave es el id del usuario de Zoho, no el nombre: dos comerciales
       // homónimos son dos filas, y un cambio de nombre en el CRM no parte el
       // histórico en dos.
@@ -136,6 +168,7 @@ export async function GET(request: NextRequest) {
       else byOwner.set(key, [affiliate]);
     }
 
+    // La participación se mide contra el programa entero, filtre o no
     const totalEntregado = sum(report.affiliates, (row) => row.puntosEntregados);
 
     let rows: OwnerRow[] = [...byOwner].map(([key, group]) => {
@@ -182,6 +215,7 @@ export async function GET(request: NextRequest) {
         conSaldo: group.filter((row) => row.saldoDisponible > 0).length,
         conRedenciones,
         empresas: new Set(group.map((row) => row.empresa).filter(Boolean)).size,
+        listaEmpresas: empresasDe(group),
         puntosEntregados,
         puntosRedimidos,
         saldoDisponible: sum(group, (row) => row.saldoDisponible),
@@ -202,7 +236,10 @@ export async function GET(request: NextRequest) {
     const search = params.get("q")?.toLowerCase().trim();
     if (search) {
       rows = rows.filter((row) =>
-        `${row.comercial} ${row.email}`.toLowerCase().includes(search)
+        [row.comercial, row.email, ...row.listaEmpresas.map((e) => e.nombre)]
+          .join(" ")
+          .toLowerCase()
+          .includes(search)
       );
     }
 
@@ -234,6 +271,12 @@ export async function GET(request: NextRequest) {
         { key: "conMembresia", header: "Con membresía", value: (r) => r.conMembresia },
         { key: "sinMembresia", header: "Sin membresía", value: (r) => r.sinMembresia },
         { key: "empresas", header: "Empresas", value: (r) => r.empresas },
+        {
+          key: "listaEmpresas",
+          header: "Empresas (afiliados)",
+          value: (r) =>
+            r.listaEmpresas.map((e) => `${e.nombre} (${e.afiliados})`).join(" | "),
+        },
         { key: "conSaldo", header: "Con saldo", value: (r) => r.conSaldo },
         { key: "conRedenciones", header: "Han redimido", value: (r) => r.conRedenciones },
         { key: "altas", header: "Altas en el periodo", value: (r) => r.altas },
@@ -345,6 +388,8 @@ export async function GET(request: NextRequest) {
       // Se devuelve lo aplicado, no lo pedido: el panel pinta el encabezado
       // del periodo con esto y así nunca miente sobre lo que está contando.
       rango: { desde, hasta },
+      empresa,
+      empresasDisponibles,
       // Si Contacts no se pudo leer, todos los afiliados caen en "sin
       // comercial" y el informe entero mentiría sin decirlo.
       padron: report.padron,

@@ -5,7 +5,8 @@ import {
   Panel,
   DataTable,
   StatusPill,
-  Spinner,
+  ReportSkeleton,
+  BusyArea,
   ErrorNote,
   formatNumber,
   formatCurrency,
@@ -30,7 +31,7 @@ export default function ResumenSection() {
     refreshToken
   );
 
-  if (loading && !data) return <Spinner />;
+  if (loading && !data) return <ReportSkeleton filters={0} tiles={8} />;
   if (error) return <ErrorNote message={error} />;
   if (!data) return null;
 
@@ -53,7 +54,7 @@ export default function ResumenSection() {
   });
 
   return (
-    <div className="flex flex-col gap-6">
+    <BusyArea busy={loading}>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           label="Entregado"
@@ -208,6 +209,6 @@ export default function ResumenSection() {
         {formatCurrency(COP_PER_POINT)}. Informe generado el{" "}
         {formatDateTime(data.generadoEn)}.
       </p>
-    </div>
+    </BusyArea>
   );
 }

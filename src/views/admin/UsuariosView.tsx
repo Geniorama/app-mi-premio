@@ -5,7 +5,7 @@ import {
   Panel,
   DataTable,
   Field,
-  Spinner,
+  Skeleton,
   ErrorNote,
   formatDate,
   inputClass,
@@ -284,7 +284,13 @@ export default function UsuariosView({ actorRole, actorId }: UsuariosViewProps) 
       </Panel>
 
       {loading && !users.length ? (
-        <Spinner label="Cargando administradores…" />
+        <Panel title="Administradores">
+          <div className="flex flex-col gap-3" role="status" aria-label="Cargando administradores…">
+            {Array.from({ length: 4 }, (_, index) => (
+              <Skeleton key={index} className="h-10 w-full" />
+            ))}
+          </div>
+        </Panel>
       ) : (
         <Panel
           title="Administradores"

@@ -23,41 +23,6 @@ export async function GET(request: NextRequest) {
     const todos = report.affiliates;
     let rows = todos;
 
-    // El comparativo mide el padrón completo del CRM, no lo que quede tras
-    // filtrar: es la cifra que dice cuánto del padrón está activado.
-    const comparativo = ["con", "sin"].map((grupo) => {
-      const subset = todos.filter((row) => row.conMembresia === (grupo === "con"));
-      return {
-        grupo,
-        etiqueta: grupo === "con" ? "Con membresía" : "Sin membresía",
-        afiliados: subset.length,
-        empresas: new Set(subset.map((row) => row.empresa).filter(Boolean)).size,
-        conSaldo: subset.filter((row) => row.saldoDisponible > 0).length,
-        conRedenciones: subset.filter((row) => row.redenciones > 0).length,
-        puntosEntregados: subset.reduce((t, r) => t + r.puntosEntregados, 0),
-        puntosRedimidos: subset.reduce((t, r) => t + r.puntosRedimidos, 0),
-        saldoDisponible: subset.reduce((t, r) => t + r.saldoDisponible, 0),
-        participacion: todos.length > 0 ? subset.length / todos.length : 0,
-      };
-    });
-
-    // El segmento por sector mide el padrón completo, igual que el comparativo
-    // de membresía: es la foto del programa, no de lo que quede tras filtrar.
-    const porSector = SECTORES.map((sector) => {
-      const subset = todos.filter((row) => row.sector === sector);
-      return {
-        sector,
-        afiliados: subset.length,
-        empresas: new Set(subset.map((row) => row.empresa).filter(Boolean)).size,
-        conSaldo: subset.filter((row) => row.saldoDisponible > 0).length,
-        conRedenciones: subset.filter((row) => row.redenciones > 0).length,
-        puntosEntregados: subset.reduce((t, r) => t + r.puntosEntregados, 0),
-        puntosRedimidos: subset.reduce((t, r) => t + r.puntosRedimidos, 0),
-        saldoDisponible: subset.reduce((t, r) => t + r.saldoDisponible, 0),
-        participacion: todos.length > 0 ? subset.length / todos.length : 0,
-      };
-    });
-
     // "con" | "sin" — sin el filtro se listan todos los afiliados del CRM
     const membresia = params.get("membresia");
     if (membresia === "con") rows = rows.filter((row) => row.conMembresia);
@@ -90,6 +55,32 @@ export async function GET(request: NextRequest) {
     if (params.get("conRedenciones") === "1") {
       rows = rows.filter((row) => row.redenciones > 0);
     }
+
+    // Los dos cortes se miden sobre lo filtrado, igual que las tarjetas y la
+    // tabla: si se elige un comercial, toda la sección habla de su cartera.
+    // La participación es respecto de ese mismo conjunto.
+    const filtrados = rows;
+    const segmento = (subset: typeof rows) => ({
+      afiliados: subset.length,
+      empresas: new Set(subset.map((row) => row.empresa).filter(Boolean)).size,
+      conSaldo: subset.filter((row) => row.saldoDisponible > 0).length,
+      conRedenciones: subset.filter((row) => row.redenciones > 0).length,
+      puntosEntregados: subset.reduce((t, r) => t + r.puntosEntregados, 0),
+      puntosRedimidos: subset.reduce((t, r) => t + r.puntosRedimidos, 0),
+      saldoDisponible: subset.reduce((t, r) => t + r.saldoDisponible, 0),
+      participacion: filtrados.length > 0 ? subset.length / filtrados.length : 0,
+    });
+
+    const comparativo = ["con", "sin"].map((grupo) => ({
+      grupo,
+      etiqueta: grupo === "con" ? "Con membresía" : "Sin membresía",
+      ...segmento(filtrados.filter((row) => row.conMembresia === (grupo === "con"))),
+    }));
+
+    const porSector = SECTORES.map((sector) => ({
+      sector,
+      ...segmento(filtrados.filter((row) => row.sector === sector)),
+    }));
 
     const sort = params.get("sort") ?? "puntosEntregados";
     const direction = params.get("dir") === "asc" ? 1 : -1;

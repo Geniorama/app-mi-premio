@@ -6,8 +6,12 @@ import {
   Panel,
   DataTable,
   Field,
+  FilterGrid,
+  CheckField,
+  ActiveFilters,
   ExportButton,
-  Spinner,
+  ReportSkeleton,
+  BusyArea,
   ErrorNote,
   Pagination,
   formatNumber,
@@ -29,10 +33,12 @@ import {
   type ExpiringRow,
 } from "./shared";
 
+const DIAS_POR_DEFECTO = "90";
+
 export default function PorVencerSection() {
   const refreshToken = useRefreshToken();
 
-  const [dias, setDias] = useState("90");
+  const [dias, setDias] = useState(DIAS_POR_DEFECTO);
   const [incluirVencidos, setIncluirVencidos] = useState(false);
   const [search, setSearch] = useState("");
   const [query_, setQuery] = useState("");
@@ -118,16 +124,42 @@ export default function PorVencerSection() {
     },
   ];
 
+  const activos = [dias !== DIAS_POR_DEFECTO, incluirVencidos, query_].filter(Boolean).length;
+  const limpiarFiltros = () => {
+    setDias(DIAS_POR_DEFECTO);
+    setIncluirVencidos(false);
+    setSearch("");
+    setQuery("");
+    reset();
+  };
+
+  // Primera carga: esqueleto en lugar de filtros, para que nadie los use
+  // antes de que lleguen los datos y sus opciones.
+  if (loading && !data) {
+    return (
+      <ReportSkeleton
+        filters={2}
+        label="Consultando los lotes de puntos en Zoho… puede tardar hasta un minuto."
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <Panel
         title="Filtros"
         description="Este informe recorre el subformulario de puntos de cada membresía; la primera carga puede tardar."
-        actions={<ExportButton href={csvHref("/api/admin/reports/expiring", filterQuery)} />}
+        actions={
+          <>
+            <ActiveFilters count={activos} onClear={limpiarFiltros} />
+            <ExportButton href={csvHref("/api/admin/reports/expiring", filterQuery)} />
+          </>
+        }
       >
-        <div className="flex flex-wrap items-end gap-3">
-          <Field label="Ventana">
+        <FilterGrid>
+          <Field label="Ventana" active={dias !== DIAS_POR_DEFECTO}>
             <select
+              disabled={loading}
               className={inputClass}
               value={dias}
               onChange={(event) => {
@@ -143,37 +175,32 @@ export default function PorVencerSection() {
               <option value="3650">Todos los lotes vigentes</option>
             </select>
           </Field>
-          <label className="flex h-9 cursor-pointer items-center gap-2 text-sm text-[#52514e]">
-            <input
-              type="checkbox"
-              checked={incluirVencidos}
-              onChange={(event) => {
-                setIncluirVencidos(event.target.checked);
-                reset();
-              }}
-              className="size-4 accent-[#417D30]"
-            />
-            Incluir lotes ya vencidos
-          </label>
-          <Field label="Buscar">
+          <CheckField
+            label="Incluir lotes ya vencidos"
+            disabled={loading}
+            checked={incluirVencidos}
+            onChange={(checked) => {
+              setIncluirVencidos(checked);
+              reset();
+            }}
+          />
+          <Field label="Buscar" wide active={Boolean(search)}>
             <input
               type="search"
               placeholder="Afiliado o correo"
-              className={`${inputClass} min-w-56`}
+              className={inputClass}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
           </Field>
-        </div>
+        </FilterGrid>
       </Panel>
 
       {error && <ErrorNote message={error} />}
-      {loading && !data && (
-        <Spinner label="Consultando los lotes de puntos en Zoho… puede tardar hasta un minuto." />
-      )}
 
       {data && (
-        <>
+        <BusyArea busy={loading}>
+          <ActiveFilters count={activos} onClear={limpiarFiltros} variant="banner" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatTile
               label="Por vencer"
@@ -220,7 +247,7 @@ export default function PorVencerSection() {
               itemLabel="lotes"
             />
           </Panel>
-        </>
+        </BusyArea>
       )}
     </div>
   );

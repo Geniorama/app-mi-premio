@@ -7,7 +7,10 @@ import {
   DataTable,
   ExportButton,
   Field,
-  Spinner,
+  FilterGrid,
+  ActiveFilters,
+  ReportSkeleton,
+  BusyArea,
   ErrorNote,
   MoneyCell,
   formatNumber,
@@ -35,9 +38,13 @@ import {
  * identidad, y por eso el descuadre —que debería ser cero— se muestra en vez
  * de esconderse.
  */
+const MESES_POR_DEFECTO = "12";
+
 export default function PuntosSection() {
   const refreshToken = useRefreshToken();
-  const [meses, setMeses] = useState("12");
+  const [meses, setMeses] = useState(MESES_POR_DEFECTO);
+  const activos = meses !== MESES_POR_DEFECTO ? 1 : 0;
+  const limpiarFiltros = () => setMeses(MESES_POR_DEFECTO);
 
   const filterQuery = useMemo(() => `meses=${meses}`, [meses]);
 
@@ -122,15 +129,25 @@ export default function PuntosSection() {
       ]
     : [];
 
+  // Primera carga: esqueleto en lugar de filtros, para que nadie los use
+  // antes de que lleguen los datos y sus opciones.
+  if (loading && !data) return <ReportSkeleton filters={1} />;
+
   return (
     <div className="flex flex-col gap-6">
       <Panel
         title="Periodo"
-        actions={<ExportButton href={csvHref("/api/admin/reports/points", filterQuery)} />}
+        actions={
+          <>
+            <ActiveFilters count={activos} onClear={limpiarFiltros} />
+            <ExportButton href={csvHref("/api/admin/reports/points", filterQuery)} />
+          </>
+        }
       >
-        <div className="flex flex-wrap gap-3">
-          <Field label="Meses en la serie">
+        <FilterGrid>
+          <Field label="Meses en la serie" active={meses !== MESES_POR_DEFECTO}>
             <select
+              disabled={loading}
               className={inputClass}
               value={meses}
               onChange={(event) => setMeses(event.target.value)}
@@ -140,14 +157,13 @@ export default function PuntosSection() {
               <option value="36">Últimos 36 meses</option>
             </select>
           </Field>
-        </div>
+        </FilterGrid>
       </Panel>
 
       {error && <ErrorNote message={error} />}
-      {loading && !data && <Spinner />}
 
       {data && (
-        <>
+        <BusyArea busy={loading}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatTile
               label="Cargado"
@@ -260,7 +276,7 @@ export default function PuntosSection() {
             usan la equivalencia del programa: 1 punto ={" "}
             {formatCurrency(COP_PER_POINT)}.
           </p>
-        </>
+        </BusyArea>
       )}
     </div>
   );
