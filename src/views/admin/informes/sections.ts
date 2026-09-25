@@ -62,6 +62,13 @@ export const INFORME_SECTIONS: InformeSection[] = [
       "Puntos emitidos por cada hotel del portafolio, cuánto se ha redimido y qué sigue vivo. El hotel se toma de la orden de compra del lote.",
   },
   {
+    slug: "noches",
+    label: "Noches vendidas",
+    title: "Noches vendidas",
+    description:
+      "Noches vendidas por hotel y por comercial, deducidas de los puntos entregados: cada noche equivale a 400 puntos.",
+  },
+  {
     slug: "por-vencer",
     label: "Puntos por vencer",
     title: "Puntos por vencer",

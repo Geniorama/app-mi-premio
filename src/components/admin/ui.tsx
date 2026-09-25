@@ -23,6 +23,17 @@ export function formatNumber(value: number | null | undefined): string {
   return numberFormatter.format(Math.round(value));
 }
 
+const nightsFormatter = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 1 });
+
+/**
+ * Noches vendidas: enteras cuando lo son y con un decimal cuando algún lote
+ * no es múltiplo de 400 puntos (12,5 noches), para no esconder la fracción.
+ */
+export function formatNights(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  return nightsFormatter.format(value);
+}
+
 /** Pesos colombianos: 50000 → "$ 50.000" */
 export function formatCurrency(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";

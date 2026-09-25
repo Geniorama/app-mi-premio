@@ -41,8 +41,9 @@ como afiliado en Zoho, y tener cuenta de afiliado tampoco te da acceso al panel.
 
 A la izquierda está el menú. Hoy hay dos módulos:
 
-- **Informes** — todo lo relativo a puntos y redenciones. Se despliega en siete secciones:
-  Resumen, Redenciones, Puntos, Afiliados, Comerciales, Hoteles y Puntos por vencer.
+- **Informes** — todo lo relativo a puntos y redenciones. Se despliega en ocho secciones:
+  Resumen, Redenciones, Puntos, Afiliados, Comerciales, Hoteles, Noches vendidas y Puntos por
+  vencer.
 - **Usuarios** — quién puede entrar al panel. *Solo lo ven los perfiles autorizados.*
 
 Arriba a la derecha aparecen tu nombre, tu rol y el botón **Salir**.
@@ -251,6 +252,7 @@ Una fila por hotel del portafolio, con los puntos que ha emitido y qué ha pasad
 |---|---|
 | **Hotel** | Nombre del hotel; debajo, cuántos lotes emitió y a cuántos afiliados |
 | **Entregado** | Puntos que emitió el hotel, en pesos y en puntos |
+| **Noches** | Noches vendidas: lo entregado dividido entre 400 puntos |
 | **Redimido** | Cuánto de lo que emitió ya se gastó |
 | **Saldo vivo** | Lo que sigue disponible de esos puntos |
 | **Vencido** | Lo que caducó sin usarse |
@@ -279,7 +281,40 @@ elegido.
 > **La primera carga tarda**, por lo mismo que *Puntos*: los dos leen el detalle de cada
 > membresía.
 
-### 3.7 Puntos por vencer
+### 3.7 Noches vendidas
+
+Cuántas noches se han vendido, por hotel y por comercial. En el CRM no existe un dato de noches:
+el panel las deduce de los puntos entregados, porque **cada noche vendida equivale a 400
+puntos**.
+
+Con **Agrupar por** eliges cómo leerlo:
+
+- **Hotel** — una fila por hotel, con cuántos comerciales han vendido en él.
+- **Comercial** — una fila por comercial, con en cuántos hoteles ha vendido.
+- **Hotel y comercial** — una fila por cada pareja: qué comercial vendió cuántas noches en qué
+  hotel.
+
+Puedes filtrar por **Hotel** y por **Comercial** (combinados, por ejemplo: las noches de un
+comercial en un solo hotel), buscar por nombre y elegir el **Periodo**. Una noche cuenta en la
+fecha en que se entregaron sus puntos. Por defecto se ven los últimos 12 meses; para ver todo,
+elige **Todo el histórico**.
+
+La gráfica **Noches mes a mes** enseña siempre los últimos 12 meses con el hotel y el comercial
+que hayas filtrado.
+
+> **De dónde sale cada cosa.** El hotel, de la orden de compra del lote de puntos (igual que en
+> *Hoteles*). El comercial, del propietario del contacto del afiliado en Zoho (igual que en
+> *Comerciales*). Si una noche aparece en el comercial equivocado, se corrige cambiando el
+> propietario del contacto en Zoho.
+
+> **Noches con decimales.** Si algún lote no es múltiplo exacto de 400 puntos (un ajuste o una
+> carga parcial), aporta una fracción de noche. Al pie del informe verás cuántos lotes están en
+> esa situación.
+
+> **La primera carga tarda**, por lo mismo que *Puntos* y *Hoteles*: lee el detalle de cada
+> membresía.
+
+### 3.8 Puntos por vencer
 
 Los puntos que caducan pronto, agrupados por cercanía al vencimiento y con el detalle de qué
 afiliado y qué lote.
@@ -293,14 +328,14 @@ caducaron.
 > primera carga puede tomar hasta un minuto. Después queda guardado unos minutos y responde al
 > instante.
 
-### 3.8 Descargar a Excel
+### 3.9 Descargar a Excel
 
 Cada informe tiene el botón **Descargar CSV**. Dos cosas importantes:
 
 - Descarga **todo lo que coincide con tus filtros**, no solo la página que estás viendo.
 - El archivo está preparado para abrirse en Excel en español, con las columnas ya separadas.
 
-### 3.9 Paginación
+### 3.10 Paginación
 
 Las tablas muestran 25 filas por página. Abajo puedes cambiar a 50, 100 o 200 y moverte entre
 páginas. Al cambiar un filtro vuelves automáticamente a la primera página.

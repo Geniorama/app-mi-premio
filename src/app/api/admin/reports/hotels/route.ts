@@ -4,7 +4,7 @@ import { requireActiveAdmin } from "@/lib/admin";
 import { listPointsLots } from "@/lib/zoho-reports";
 import { toCsv, csvResponse, formatDateTimeForCsv } from "@/lib/csv";
 import { parsePagination, paginate } from "@/lib/pagination";
-import { pointsToCop } from "@/lib/points";
+import { pointsToCop, pointsToNights } from "@/lib/points";
 import { SIN_HOTEL } from "@/lib/hotels";
 
 /**
@@ -32,6 +32,8 @@ interface HotelRow {
   /** Lotes de puntos emitidos por el hotel */
   lotes: number;
   puntosEntregados: number;
+  /** Noches vendidas: puntos entregados ÷ 400 */
+  noches: number;
   puntosRedimidos: number;
   /** Entregados − redimidos: lo que sigue vivo */
   saldoVivo: number;
@@ -86,6 +88,7 @@ export async function GET(request: NextRequest) {
         hotel,
         lotes: group.length,
         puntosEntregados,
+        noches: pointsToNights(puntosEntregados),
         puntosRedimidos,
         saldoVivo: group
           .filter((lot) => !isExpired(lot.diasParaVencer))
@@ -130,6 +133,7 @@ export async function GET(request: NextRequest) {
         { key: "puntosEntregados", header: "Puntos entregados", value: (r) => r.puntosEntregados },
         // Sin símbolo ni separadores: así Excel lo trata como número
         { key: "valorEntregadoCOP", header: "Entregado (COP)", value: (r) => r.valorEntregadoCOP },
+        { key: "noches", header: "Noches vendidas", value: (r) => r.noches.toFixed(1) },
         { key: "puntosRedimidos", header: "Puntos redimidos", value: (r) => r.puntosRedimidos },
         { key: "valorRedimidoCOP", header: "Redimido (COP)", value: (r) => r.valorRedimidoCOP },
         { key: "saldoVivo", header: "Saldo vivo", value: (r) => r.saldoVivo },
@@ -158,6 +162,7 @@ export async function GET(request: NextRequest) {
     const resumen = {
       hoteles: rows.filter((row) => row.hotel !== SIN_HOTEL).length,
       puntosEntregados: rows.reduce((t, r) => t + r.puntosEntregados, 0),
+      noches: rows.reduce((t, r) => t + r.noches, 0),
       puntosRedimidos: rows.reduce((t, r) => t + r.puntosRedimidos, 0),
       saldoVivo: rows.reduce((t, r) => t + r.saldoVivo, 0),
       lotes: rows.reduce((t, r) => t + r.lotes, 0),

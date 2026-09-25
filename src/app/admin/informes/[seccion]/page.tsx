@@ -11,6 +11,7 @@ import PuntosSection from "@/views/admin/informes/puntos";
 import AfiliadosSection from "@/views/admin/informes/afiliados";
 import ComercialesSection from "@/views/admin/informes/comerciales";
 import HotelesSection from "@/views/admin/informes/hoteles";
+import NochesSection from "@/views/admin/informes/noches";
 import PorVencerSection from "@/views/admin/informes/por-vencer";
 
 /** El slug de la URL decide qué sección se monta. */
@@ -21,6 +22,7 @@ const SECTION_COMPONENTS: Record<string, React.ComponentType> = {
   afiliados: AfiliadosSection,
   comerciales: ComercialesSection,
   hoteles: HotelesSection,
+  noches: NochesSection,
   "por-vencer": PorVencerSection,
 };
 

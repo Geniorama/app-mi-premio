@@ -343,6 +343,8 @@ export interface HotelRow {
   hotel: string;
   lotes: number;
   puntosEntregados: number;
+  /** Puntos entregados ÷ 400 */
+  noches: number;
   puntosRedimidos: number;
   saldoVivo: number;
   puntosVencidos: number;
@@ -362,12 +364,60 @@ export interface HotelsData {
   resumen: {
     hoteles: number;
     puntosEntregados: number;
+    noches: number;
     puntosRedimidos: number;
     saldoVivo: number;
     lotes: number;
     /** Puntos cuyo lote no identifica hotel */
     sinHotel: number;
   };
+}
+
+export type NightsVista = "hotel" | "comercial" | "detalle";
+
+export interface NightsRow {
+  clave: string;
+  /** Vacío en la vista por comercial */
+  hotel: string;
+  /** Vacío en la vista por hotel */
+  comercial: string;
+  comercialId: string;
+  comercialEmail: string;
+  /** Puntos entregados ÷ 400; puede tener fracción */
+  noches: number;
+  puntosEntregados: number;
+  valorEntregadoCOP: number;
+  lotes: number;
+  afiliados: number;
+  hoteles: number;
+  comerciales: number;
+  /** Fracción (0–1) de las noches de lo filtrado */
+  participacion: number;
+  ultimaEntrega: string | null;
+}
+
+export interface NightsData {
+  vista: NightsVista;
+  rows: NightsRow[];
+  pagination: PaginationMeta;
+  resumen: {
+    noches: number;
+    puntosEntregados: number;
+    lotes: number;
+    afiliados: number;
+    hoteles: number;
+    comerciales: number;
+    nochesSinHotel: number;
+    nochesSinComercial: number;
+    /** Lotes cuyos puntos no son múltiplo exacto de una noche */
+    lotesFraccionados: number;
+  };
+  serieMensual: Array<{ mes: string; noches: number }>;
+  rango: { desde: string | null; hasta: string | null };
+  hotelesDisponibles: string[];
+  comercialesDisponibles: Array<{ id: string; nombre: string }>;
+  puntosPorNoche: number;
+  padron: PadronStatus;
 }
 
 export function monthLabels(month: string) {

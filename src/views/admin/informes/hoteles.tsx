@@ -14,6 +14,7 @@ import {
   ErrorNote,
   Pagination,
   formatNumber,
+  formatNights,
   formatCurrency,
   MoneyCell,
   formatDate,
@@ -21,7 +22,7 @@ import {
   type Column,
 } from "@/components/admin/ui";
 import { OrdinalBarList } from "@/components/admin/charts";
-import { COP_PER_POINT } from "@/lib/points";
+import { COP_PER_POINT, POINTS_PER_NIGHT } from "@/lib/points";
 import {
   useRefreshToken,
   useReport,
@@ -111,6 +112,12 @@ export default function HotelesSection() {
       header: "Entregado",
       numeric: true,
       render: (row) => <MoneyCell points={row.puntosEntregados} />,
+    },
+    {
+      key: "noches",
+      header: "Noches",
+      numeric: true,
+      render: (row) => formatNights(row.noches),
     },
     {
       key: "puntosRedimidos",
@@ -221,6 +228,7 @@ export default function HotelesSection() {
               label="Entregado"
               value={data.resumen.puntosEntregados}
               money
+              hint={`${formatNights(data.resumen.noches)} noches vendidas`}
             />
             <StatTile
               label="Redimido"
@@ -258,7 +266,10 @@ export default function HotelesSection() {
             identificable. Los puntos son fungibles y se consumen por antigüedad, así
             que <strong>Redimido</strong> es cuánto de lo que emitió el hotel ya se
             gastó, no con qué bono. Los valores en pesos usan la equivalencia del
-            programa: 1 punto = {formatCurrency(COP_PER_POINT)}.
+            programa: 1 punto = {formatCurrency(COP_PER_POINT)}. Las{" "}
+            <strong>Noches</strong> se deducen de lo entregado: 1 noche ={" "}
+            {formatNumber(POINTS_PER_NIGHT)} puntos (el detalle por comercial está en
+            Noches vendidas).
           </p>
         </BusyArea>
       )}
